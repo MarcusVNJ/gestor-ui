@@ -1,0 +1,27 @@
+:host {
+  display: block;
+}
+
+.not-found {
+  display: grid;
+  max-inline-size: 40rem;
+  justify-items: start;
+  gap: var(--space-4);
+}
+
+.not-found__code,
+.not-found__description {
+  margin: 0;
+}
+
+.not-found__code {
+  color: var(--color-action-primary);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.not-found__description {
+  color: var(--color-text-secondary);
+}

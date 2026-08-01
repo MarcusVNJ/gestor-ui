@@ -1,1 +1,84 @@
-<router-outlet />
+<a
+  class="skip-link"
+  href="#main-content"
+  [attr.inert]="isDrawerOpen() ? '' : null"
+  [attr.aria-hidden]="isDrawerOpen()"
+>
+  Ir para o conteúdo
+</a>
+
+<div class="app-shell">
+  <header class="app-header ui-inverse" [attr.inert]="isDrawerOpen() ? '' : null">
+    <a class="app-identity" routerLink="/alunos" (click)="handleNavigationStart('/alunos')">
+      <span class="app-identity__name">Gestor acadêmico</span>
+      <span class="app-identity__context">Administração acadêmica</span>
+    </a>
+
+    <button
+      #menuButton
+      class="menu-button"
+      type="button"
+      aria-controls="primary-navigation"
+      [attr.aria-expanded]="isDrawerOpen()"
+      (click)="openDrawer()"
+    >
+      Menu
+    </button>
+  </header>
+
+  <aside
+    #drawer
+    id="primary-navigation"
+    class="navigation-panel ui-inverse"
+    [class.navigation-panel--open]="isDrawerOpen()"
+    aria-label="Menu principal"
+    (keydown)="handleDrawerKeydown($event)"
+  >
+    <div class="navigation-panel__header">
+      <p class="navigation-panel__title">Áreas acadêmicas</p>
+      <button #closeButton class="drawer-close-button" type="button" (click)="closeDrawer()">
+        Fechar menu
+      </button>
+    </div>
+
+    <nav aria-label="Navegação principal">
+      <ul class="navigation-list">
+        @for (item of navigationItems; track item.path) {
+          <li>
+            <a
+              #activeLink="routerLinkActive"
+              class="navigation-link"
+              [routerLink]="item.path"
+              routerLinkActive="navigation-link--active"
+              [routerLinkActiveOptions]="{ exact: true }"
+              [attr.aria-current]="activeLink.isActive ? 'page' : null"
+              (click)="handleNavigationStart(item.path)"
+            >
+              {{ item.label }}
+            </a>
+          </li>
+        }
+      </ul>
+    </nav>
+  </aside>
+
+  <button
+    class="drawer-backdrop"
+    type="button"
+    tabindex="-1"
+    aria-label="Fechar menu"
+    [class.drawer-backdrop--visible]="isDrawerOpen()"
+    (click)="closeDrawer()"
+  ></button>
+
+  <main
+    id="main-content"
+    class="app-content"
+    tabindex="-1"
+    [attr.inert]="isDrawerOpen() ? '' : null"
+  >
+    <div class="app-content__inner">
+      <router-outlet />
+    </div>
+  </main>
+</div>

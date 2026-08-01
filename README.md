@@ -41,9 +41,9 @@ API_TARGET=http://localhost:8080
 Quando o backend estiver fora do contêiner do frontend, substitua `localhost` pelo host ou IP
 alcançável a partir deste contêiner. Reinicie `npm start` após alterar o arquivo.
 
-As rotas `/alunos`, `/cursos`, `/disciplinas`, `/turmas` e `/matriculas` estão reservadas. Até que
-suas telas sejam implementadas, elas redirecionam para a página inicial. Endereços desconhecidos
-também redirecionam para a página inicial.
+O shell oferece navegação para `/alunos`, `/cursos`, `/disciplinas`, `/turmas` e `/matriculas`.
+Enquanto os CRUDs não são implementados, cada rota apresenta uma introdução própria. A raiz
+redireciona para `/alunos` e endereços desconhecidos exibem uma página 404 interna.
 
 ## Verificações
 

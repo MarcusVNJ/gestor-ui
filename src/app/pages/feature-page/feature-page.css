@@ -1,0 +1,26 @@
+:host {
+  display: block;
+}
+
+.feature-page {
+  display: grid;
+  max-inline-size: 65ch;
+  gap: var(--space-3);
+}
+
+.feature-page__eyebrow,
+.feature-page__description {
+  margin: 0;
+}
+
+.feature-page__eyebrow {
+  color: var(--color-action-primary);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.feature-page__description {
+  color: var(--color-text-secondary);
+}

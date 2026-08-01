@@ -23,6 +23,10 @@ body {
   line-height: var(--line-height-body);
 }
 
+body.app-drawer-open {
+  overflow: hidden;
+}
+
 button,
 input,
 textarea,
