@@ -136,3 +136,6 @@ Esta aplicação foi desenvolvida com o suporte de Inteligência Artificial Gene
 
 - **Escopo do Apoio de IA**: Auxílio no planejamento e quebra das tarefas do backlog, estruturação dos padrões reativos com Angular Signals e RxJS, apoio na elaboração dos componentes standalone e design system flat azul, escrita da suíte de testes automatizados com Vitest e geração preliminar da documentação.
 - **Revisão e Responsabilidade Humanas**: Todo o código, arquitetura, testes, estilos e documentação foram minuciosamente inspecionados, executados, corrigidos e validados. O resultado final e as decisões tomadas refletem a verificação completa e estão sob total responsabilidade do desenvolvedor responsável pela entrega.
+
+# BRANCH com arquivos de configuracao de AI
+Basta trocar para a branch "config_ai". Nela os arquivos e pastas de agentes nao sao ignorados pelo git ignore.
