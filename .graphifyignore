@@ -1,0 +1,70 @@
+# Graphify output
+.graphifyignore
+graphify-out/
+
+# OpenCode and agent tooling
+.agent/
+.agents/
+.opencode/
+AGENTS.md
+opencode.json
+opencode.jsonc
+
+# Angular dependencies, build output, and caches
+node_modules/
+dist/
+tmp/
+out-tsc/
+bazel-out/
+.angular/cache/
+.sass-cache/
+*.tsbuildinfo
+
+# Test and browser-automation output
+coverage/
+test-results/
+playwright-report/
+cypress/screenshots/
+cypress/videos/
+cypress/downloads/
+
+# Package-manager caches
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+
+# Logs and temporary runtime files
+logs/
+temp/
+*.log
+*.pid
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+
+# IDE and version-control metadata
+.git/
+.idea/
+.vscode/
+.history/
+.classpath
+.project
+.settings/
+*.iml
+*.iws
+*.ipr
+*.sublime-project
+*.sublime-workspace
+.gitattributes
+.gitignore
+
+# Operating-system files
+.DS_Store
+Thumbs.db

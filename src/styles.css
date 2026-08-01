@@ -1,0 +1,39 @@
+@import './styles/tokens.css';
+@import './styles/ui-patterns.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-block-size: 100%;
+  background: var(--color-background-app);
+  font-family: var(--font-family-base);
+}
+
+body {
+  min-block-size: 100%;
+  margin: 0;
+  background: var(--color-background-app);
+  color: var(--color-text);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-body);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}

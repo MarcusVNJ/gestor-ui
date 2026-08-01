@@ -1,0 +1,26 @@
+<dialog
+  #dialog
+  class="ui-dialog"
+  [attr.aria-labelledby]="titleId"
+  [attr.aria-describedby]="description() ? descriptionId : null"
+  [attr.aria-busy]="busy() ? 'true' : null"
+  (cancel)="handleCancel($event)"
+  (close)="restoreFocus()"
+>
+  <div class="ui-dialog__surface">
+    <header class="ui-dialog__header">
+      <h2 class="ui-section-title" [id]="titleId">{{ title() }}</h2>
+      @if (description(); as dialogDescription) {
+        <p class="ui-dialog__description" [id]="descriptionId">{{ dialogDescription }}</p>
+      }
+    </header>
+
+    <div>
+      <ng-content />
+    </div>
+
+    <footer class="ui-dialog__actions">
+      <ng-content select="[dialog-actions]" />
+    </footer>
+  </div>
+</dialog>

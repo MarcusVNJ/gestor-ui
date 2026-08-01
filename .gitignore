@@ -1,0 +1,49 @@
+# Angular build output and caches
+/dist/
+/tmp/
+/out-tsc/
+/bazel-out/
+/.angular/cache/
+/.sass-cache/
+*.tsbuildinfo
+
+# Dependencies
+/node_modules/
+
+# Test output
+/coverage/
+/test-results/
+/playwright-report/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editors and IDEs
+/.idea/
+/.history/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+/.settings/
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/tasks.json
+!/.vscode/launch.json
+!/.vscode/extensions.json
+
+# Operating system files
+.DS_Store
+Thumbs.db
+/.editorconfig
+
+.agent/

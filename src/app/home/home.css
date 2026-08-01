@@ -1,0 +1,42 @@
+:host {
+  display: block;
+}
+
+.home {
+  display: grid;
+  min-block-size: 100dvh;
+  place-items: center;
+  padding: clamp(var(--space-4), 5vw, var(--space-8));
+}
+
+.welcome {
+  inline-size: min(100%, 44rem);
+  padding: clamp(var(--space-6), 6vw, var(--space-12));
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-subtle);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-3);
+  color: var(--color-action-primary);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(var(--font-size-page-title-min), 7vw, var(--font-size-page-title-max));
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-heading);
+  text-wrap: balance;
+}
+
+.summary {
+  max-inline-size: 55ch;
+  margin: var(--space-4) 0 0;
+  color: var(--color-text-secondary);
+}
