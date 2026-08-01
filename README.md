@@ -45,6 +45,10 @@ O shell oferece navegação para `/alunos`, `/cursos`, `/disciplinas`, `/turmas`
 Enquanto os CRUDs não são implementados, cada rota apresenta uma introdução própria. A raiz
 redireciona para `/alunos` e endereços desconhecidos exibem uma página 404 interna.
 
+## Limitações conhecidas dos contratos de API
+
+- **Disciplinas (`POST /api/disciplines/v1` e `PUT /api/disciplines/v1/{id}`):** O schema formal do OpenAPI omite as propriedades `minLength` e `maxLength` no payload do cadastro/edição, embora a descrição textual declare a restrição de 1 a 120 caracteres. O frontend aplica essa validação de 1 a 120 caracteres úteis (com remoção de espaços nas extremidades) de forma consistente antes da submissão.
+
 ## Verificações
 
 ```bash

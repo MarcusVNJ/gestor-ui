@@ -31,7 +31,10 @@ export const routes: Routes = [
   },
   {
     path: 'disciplinas',
-    loadComponent: loadFeaturePage,
+    loadComponent: () =>
+      import('./features/disciplines/disciplines-page').then(
+        ({ DisciplinesPage }) => DisciplinesPage,
+      ),
     title: 'Disciplinas | Gestor acadêmico',
     data: {
       heading: 'Disciplinas',
