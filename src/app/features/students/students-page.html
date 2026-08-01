@@ -1,0 +1,219 @@
+<header class="students-header">
+  <div class="students-header__main">
+    <div class="students-header__title-group">
+      <h1 #heading id="students-heading" tabindex="-1" class="ui-page-title">Alunos</h1>
+      <span class="ui-badge ui-badge--neutral" aria-label="Total de alunos">
+        {{ vm.itemCount() }} {{ vm.itemCount() === 1 ? 'aluno' : 'alunos' }}
+      </span>
+    </div>
+    <div class="students-header__actions">
+      <button
+        #createButton
+        type="button"
+        class="ui-button ui-button--primary"
+        (click)="openCreateDialog(createButton)"
+      >
+        Cadastrar aluno
+      </button>
+    </div>
+  </div>
+  <p class="students-header__description">Consulte e gerencie os registros de alunos nesta área.</p>
+</header>
+
+<div class="sr-only" role="status" aria-live="polite">
+  {{ vm.announcement() }}
+</div>
+
+<main class="students-content">
+  @if (vm.isLoading()) {
+    <div class="ui-async-state" role="status">
+      <p>Carregando alunos...</p>
+    </div>
+  } @else if (vm.isError()) {
+    <div class="ui-async-state" role="alert">
+      <p>{{ vm.errorMessage() }}</p>
+      <button type="button" class="ui-button ui-button--secondary" (click)="vm.loadStudents()">
+        Tentar novamente
+      </button>
+    </div>
+  } @else if (vm.isEmpty()) {
+    <div class="ui-async-state">
+      <p>Nenhum aluno cadastrado</p>
+    </div>
+  } @else {
+    <div
+      #tableRegion
+      class="ui-table-region"
+      tabindex="0"
+      role="region"
+      aria-label="Lista de alunos"
+    >
+      <table class="ui-table">
+        <caption class="sr-only">
+          Alunos cadastrados no sistema
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Nome</th>
+            <th scope="col">E-mail</th>
+            <th scope="col">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (student of vm.students(); track student.id) {
+            <tr>
+              <td>{{ student.name }}</td>
+              <td>{{ student.email }}</td>
+              <td>
+                <div class="ui-actions">
+                  <button
+                    type="button"
+                    class="ui-button ui-button--secondary"
+                    (click)="openEditDialog(student, $event.currentTarget)"
+                  >
+                    Editar <span class="sr-only">aluno {{ student.name }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="ui-button ui-button--destructive"
+                    (click)="openDeleteDialog(student, $event.currentTarget)"
+                  >
+                    Excluir <span class="sr-only">aluno {{ student.name }}</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</main>
+
+<app-dialog
+  #formDialog
+  [title]="formMode() === 'create' ? 'Cadastrar aluno' : 'Editar aluno'"
+  [description]="
+    formMode() === 'create'
+      ? 'Preencha os campos abaixo para cadastrar um novo aluno.'
+      : 'Atualize os dados do aluno selecionado.'
+  "
+  [busy]="isSubmitting()"
+>
+  <form [formGroup]="studentForm" (ngSubmit)="submitForm()" class="student-form" novalidate>
+    @if (formSummaryError(); as summaryError) {
+      <div class="ui-message ui-message--danger" role="alert">
+        <p>{{ summaryError }}</p>
+      </div>
+    }
+
+    <div class="ui-field">
+      <label for="student-name" class="ui-label">
+        Nome <span class="required-indicator" aria-hidden="true">*</span>
+      </label>
+      <input
+        id="student-name"
+        type="text"
+        autocomplete="name"
+        formControlName="name"
+        class="ui-control"
+        [attr.aria-invalid]="getFieldError('name') !== null ? 'true' : null"
+        [attr.aria-describedby]="getFieldError('name') !== null ? 'student-name-error' : null"
+      />
+      @if (getFieldError('name'); as nameError) {
+        <p id="student-name-error" class="ui-field-error" role="alert">
+          {{ nameError }}
+        </p>
+      }
+    </div>
+
+    <div class="ui-field">
+      <label for="student-email" class="ui-label">
+        E-mail <span class="required-indicator" aria-hidden="true">*</span>
+      </label>
+      <input
+        id="student-email"
+        type="email"
+        autocomplete="email"
+        formControlName="email"
+        class="ui-control"
+        [attr.aria-invalid]="getFieldError('email') !== null ? 'true' : null"
+        [attr.aria-describedby]="getFieldError('email') !== null ? 'student-email-error' : null"
+      />
+      @if (getFieldError('email'); as emailError) {
+        <p id="student-email-error" class="ui-field-error" role="alert">
+          {{ emailError }}
+        </p>
+      }
+    </div>
+
+    <div dialog-actions class="ui-actions">
+      <button
+        type="button"
+        class="ui-button ui-button--secondary"
+        (click)="closeFormDialog()"
+        [disabled]="isSubmitting()"
+      >
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        class="ui-button ui-button--primary"
+        [disabled]="isSubmitting()"
+        [attr.aria-busy]="isSubmitting() ? 'true' : null"
+      >
+        {{
+          isSubmitting()
+            ? formMode() === 'create'
+              ? 'Cadastrando...'
+              : 'Salvando...'
+            : formMode() === 'create'
+              ? 'Cadastrar aluno'
+              : 'Salvar alterações'
+        }}
+      </button>
+    </div>
+  </form>
+</app-dialog>
+
+<app-dialog
+  #deleteDialog
+  title="Excluir aluno?"
+  description="Esta ação é permanente e removerá o aluno da base de dados."
+  [busy]="isDeleting()"
+>
+  <div class="delete-confirmation-content">
+    @if (studentToDelete(); as student) {
+      <p>
+        Tem certeza que deseja excluir o aluno
+        <strong>{{ student.name }}</strong> ({{ student.email }})?
+      </p>
+    }
+
+    @if (deleteError(); as error) {
+      <div class="ui-message ui-message--danger" role="alert">
+        <p>{{ error }}</p>
+      </div>
+    }
+  </div>
+
+  <div dialog-actions class="ui-actions">
+    <button
+      type="button"
+      class="ui-button ui-button--secondary"
+      (click)="closeDeleteDialog()"
+      [disabled]="isDeleting()"
+    >
+      Cancelar
+    </button>
+    <button
+      type="button"
+      class="ui-button ui-button--destructive"
+      (click)="confirmDelete()"
+      [disabled]="isDeleting()"
+      [attr.aria-busy]="isDeleting() ? 'true' : null"
+    >
+      {{ isDeleting() ? 'Excluindo...' : 'Excluir aluno' }}
+    </button>
+  </div>
+</app-dialog>
