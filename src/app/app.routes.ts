@@ -55,7 +55,10 @@ export const routes: Routes = [
   },
   {
     path: 'matriculas',
-    loadComponent: loadFeaturePage,
+    loadComponent: () =>
+      import('./features/enrollments/enrollments-page').then(
+        ({ EnrollmentsPage }) => EnrollmentsPage,
+      ),
     title: 'Matrículas | Gestor acadêmico',
     data: {
       heading: 'Matrículas',

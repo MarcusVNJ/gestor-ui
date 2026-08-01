@@ -1,0 +1,266 @@
+<header class="enrollments-header">
+  <div class="enrollments-header__main">
+    <div class="enrollments-header__title-group">
+      <h1 #heading id="enrollments-heading" tabindex="-1" class="ui-page-title">Matrículas</h1>
+    </div>
+    <button
+      #newEnrollmentButton
+      type="button"
+      class="ui-button ui-button--primary"
+      [disabled]="vm.isOptionsLoading()"
+      (click)="openCreateDialog(newEnrollmentButton)"
+    >
+      Nova matrícula
+    </button>
+  </div>
+  <p class="enrollments-header__description">
+    Consulte e gerencie os vínculos de alunos com as turmas.
+  </p>
+</header>
+
+<section class="enrollments-content" aria-labelledby="enrollments-heading">
+  @if (createdEnrollment(); as created) {
+    <div class="ui-panel enrollment-confirmation-card">
+      <div class="enrollment-confirmation-card__header">
+        <h2 class="ui-section-title">Última matrícula realizada</h2>
+        <app-status-badge [status]="created.status" />
+      </div>
+      <dl class="enrollment-details-list">
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">ID da matrícula:</dt>
+          <dd class="enrollment-detail-item__value">{{ created.id }}</dd>
+        </div>
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">Aluno:</dt>
+          <dd class="enrollment-detail-item__value">
+            @if (createdStudent(); as std) {
+              {{ std.name }} ({{ std.email }})
+            } @else {
+              {{ created.studentId }}
+            }
+          </dd>
+        </div>
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">Turma:</dt>
+          <dd class="enrollment-detail-item__value">{{ created.academicClassId }}</dd>
+        </div>
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">Situação:</dt>
+          <dd class="enrollment-detail-item__value">Pendente</dd>
+        </div>
+      </dl>
+      <div class="ui-actions">
+        <button
+          type="button"
+          class="ui-button ui-button--primary"
+          (click)="openCreateDialog(newEnrollmentButton)"
+        >
+          Nova matrícula
+        </button>
+      </div>
+    </div>
+  } @else {
+    <div class="ui-panel enrollment-guidance-card">
+      <h2 class="ui-section-title">Gestão de matrículas</h2>
+      <p>
+        Para efetuar a matrícula de um aluno em uma turma aberta, clique no botão
+        <strong>Nova matrícula</strong> acima.
+      </p>
+      <p class="ui-metadata">
+        A matrícula será criada com situação <strong>Pendente</strong> até sua confirmação.
+      </p>
+    </div>
+  }
+</section>
+
+<app-dialog
+  #formDialog
+  [title]="createdEnrollment() ? 'Matrícula criada com sucesso' : 'Nova matrícula'"
+  [description]="
+    createdEnrollment()
+      ? 'A matrícula foi registrada com situação Pendente no servidor.'
+      : 'Selecione um aluno e uma turma aberta para realizar a matrícula.'
+  "
+  [busy]="isSubmitting()"
+>
+  @if (createdEnrollment(); as created) {
+    <div class="enrollment-success-view">
+      <div class="enrollment-success-header">
+        <span class="ui-label">Status confirmado:</span>
+        <app-status-badge [status]="created.status" />
+      </div>
+
+      <dl class="enrollment-details-list">
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">ID da matrícula:</dt>
+          <dd class="enrollment-detail-item__value">{{ created.id }}</dd>
+        </div>
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">ID do aluno:</dt>
+          <dd class="enrollment-detail-item__value">
+            @if (createdStudent(); as std) {
+              {{ std.name }} ({{ std.email }}) —
+            }
+            {{ created.studentId }}
+          </dd>
+        </div>
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">ID da turma:</dt>
+          <dd class="enrollment-detail-item__value">{{ created.academicClassId }}</dd>
+        </div>
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">Situação:</dt>
+          <dd class="enrollment-detail-item__value">Pendente</dd>
+        </div>
+      </dl>
+
+      <div dialog-actions class="ui-actions">
+        <button
+          type="button"
+          class="ui-button ui-button--secondary"
+          (click)="resetFormAndCreateAnother()"
+        >
+          Criar outra matrícula
+        </button>
+        <button
+          type="button"
+          class="ui-button ui-button--primary"
+          autofocus
+          (click)="closeFormDialog()"
+        >
+          Concluir
+        </button>
+      </div>
+    </div>
+  } @else {
+    <form [formGroup]="enrollmentForm" (ngSubmit)="submitForm()" class="enrollment-form" novalidate>
+      @if (vm.isStudentsError()) {
+        <div class="ui-message ui-message--danger" role="alert">
+          <p>{{ vm.studentsErrorMessage() }}</p>
+          <button type="button" class="ui-button ui-button--secondary" (click)="vm.loadStudents()">
+            Tentar carregar alunos novamente
+          </button>
+        </div>
+      }
+
+      @if (vm.isClassesError()) {
+        <div class="ui-message ui-message--danger" role="alert">
+          <p>{{ vm.classesErrorMessage() }}</p>
+          <button
+            type="button"
+            class="ui-button ui-button--secondary"
+            (click)="vm.loadAcademicClasses()"
+          >
+            Tentar carregar turmas novamente
+          </button>
+        </div>
+      }
+
+      @if (!vm.isClassesLoading() && !vm.isClassesError() && !vm.hasOpenAcademicClasses()) {
+        <div class="ui-message ui-message--warning" role="status">
+          Não há turmas abertas disponíveis para matrícula no momento.
+        </div>
+      }
+
+      @if (formSummaryError(); as summaryError) {
+        <div class="ui-message ui-message--danger" role="alert">
+          {{ summaryError }}
+        </div>
+      }
+
+      <div class="ui-field">
+        <label for="enrollment-student" class="ui-label">
+          Aluno <span class="required-indicator" aria-hidden="true">*</span>
+        </label>
+        <select
+          #studentSelect
+          id="enrollment-student"
+          formControlName="studentId"
+          class="ui-control"
+          autofocus
+          [attr.aria-invalid]="getStudentIdError() !== null ? 'true' : null"
+          [attr.aria-describedby]="
+            getStudentIdError() !== null
+              ? 'enrollment-student-help enrollment-student-error'
+              : 'enrollment-student-help'
+          "
+        >
+          <option value="">
+            {{ vm.isStudentsLoading() ? 'Carregando alunos...' : 'Selecione um aluno...' }}
+          </option>
+          @for (student of vm.students(); track student.id) {
+            <option [value]="student.id">{{ student.name }} ({{ student.email }})</option>
+          }
+        </select>
+        <p id="enrollment-student-help" class="ui-field-help">
+          Selecione o aluno que será matriculado.
+        </p>
+        @if (getStudentIdError(); as studentError) {
+          <p id="enrollment-student-error" class="ui-field-error" role="alert">
+            {{ studentError }}
+          </p>
+        }
+      </div>
+
+      <div class="ui-field">
+        <label for="enrollment-class" class="ui-label">
+          Turma <span class="required-indicator" aria-hidden="true">*</span>
+        </label>
+        <select
+          #classSelect
+          id="enrollment-class"
+          formControlName="academicClassId"
+          class="ui-control"
+          [attr.aria-invalid]="getAcademicClassIdError() !== null ? 'true' : null"
+          [attr.aria-describedby]="
+            getAcademicClassIdError() !== null
+              ? 'enrollment-class-help enrollment-class-error'
+              : 'enrollment-class-help'
+          "
+        >
+          <option value="">
+            {{ vm.isClassesLoading() ? 'Carregando turmas...' : 'Selecione uma turma aberta...' }}
+          </option>
+          @for (cls of vm.openAcademicClasses(); track cls.id) {
+            <option [value]="cls.id">
+              {{ cls.id }} (Aberta, {{ cls.seatLimit }}
+              {{ cls.seatLimit === 1 ? 'vaga' : 'vagas' }})
+            </option>
+          }
+        </select>
+        <p id="enrollment-class-help" class="ui-field-help">
+          Selecione a turma aberta para a qual o aluno será matriculado.
+        </p>
+        @if (getAcademicClassIdError(); as classError) {
+          <p id="enrollment-class-error" class="ui-field-error" role="alert">
+            {{ classError }}
+          </p>
+        }
+      </div>
+
+      <p class="ui-field-help">
+        A validação definitiva da situação e da matrícula pertence ao servidor e pode mudar enquanto
+        o formulário está aberto.
+      </p>
+
+      <div dialog-actions class="ui-actions">
+        <button
+          type="button"
+          class="ui-button ui-button--secondary"
+          [disabled]="isSubmitting()"
+          (click)="closeFormDialog()"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          class="ui-button ui-button--primary"
+          [disabled]="isSubmitting() || vm.isOptionsLoading() || !vm.hasOpenAcademicClasses()"
+          [attr.aria-busy]="isSubmitting() ? 'true' : null"
+        >
+          {{ isSubmitting() ? 'Criando...' : 'Criar matrícula' }}
+        </button>
+      </div>
+    </form>
+  }
+</app-dialog>

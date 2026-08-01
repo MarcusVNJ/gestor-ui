@@ -1,0 +1,102 @@
+:host {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-6);
+}
+
+.enrollments-header,
+.enrollments-content,
+.enrollment-form,
+.enrollment-success-view {
+  display: grid;
+}
+
+.enrollments-header {
+  gap: var(--space-2);
+}
+
+.enrollments-header__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.enrollments-header__title-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.enrollments-header__description {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.enrollments-content,
+.enrollment-form,
+.enrollment-success-view {
+  gap: var(--space-4);
+}
+
+.enrollment-confirmation-card,
+.enrollment-guidance-card {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.enrollment-confirmation-card__header,
+.enrollment-success-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.enrollment-details-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--color-surface-info);
+  border: 1px solid var(--color-action-primary-subtle);
+  border-radius: var(--radius-control);
+}
+
+.enrollment-detail-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.enrollment-detail-item dt {
+  margin: 0;
+  min-inline-size: 8rem;
+}
+
+.enrollment-detail-item dd {
+  margin: 0;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  font-family: var(--font-family-mono, monospace);
+}
+
+.required-indicator {
+  color: var(--color-danger);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
