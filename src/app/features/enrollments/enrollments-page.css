@@ -41,6 +41,83 @@
   gap: var(--space-4);
 }
 
+.query-controls-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.axis-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.axis-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: var(--target-size-min);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-functional) ease,
+    background-color var(--duration-functional) ease;
+}
+
+.axis-option-label:hover {
+  background: var(--color-surface-info);
+}
+
+.axis-option-label--selected {
+  border-color: var(--color-action-primary);
+  background: var(--color-surface-info);
+  color: var(--color-action-primary);
+}
+
+.axis-option-label input[type='radio'] {
+  accent-color: var(--color-action-primary);
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+}
+
+.query-idle-card {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.query-results-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.query-results-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.query-context-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.enrollment-id,
+.enrollment-class-id {
+  font-family: var(--font-family-mono, monospace);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
 .enrollment-confirmation-card,
 .enrollment-guidance-card {
   display: grid;

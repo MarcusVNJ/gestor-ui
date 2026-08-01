@@ -11,6 +11,8 @@ describe('EnrollmentsPage', () => {
   let fixture: ComponentFixture<EnrollmentsPage>;
   let enrollmentsApiMock: {
     enrollStudent: ReturnType<typeof vi.fn>;
+    listEnrollmentsByStudent: ReturnType<typeof vi.fn>;
+    listEnrollmentsByAcademicClass: ReturnType<typeof vi.fn>;
   };
   let studentsApiMock: {
     listStudents: ReturnType<typeof vi.fn>;
@@ -32,6 +34,8 @@ describe('EnrollmentsPage', () => {
   beforeEach(() => {
     enrollmentsApiMock = {
       enrollStudent: vi.fn(),
+      listEnrollmentsByStudent: vi.fn(),
+      listEnrollmentsByAcademicClass: vi.fn(),
     };
     studentsApiMock = {
       listStudents: vi.fn(),
@@ -58,6 +62,210 @@ describe('EnrollmentsPage', () => {
     expect(root.textContent).toContain('Consulte e gerencie os vínculos de alunos com as turmas.');
   });
 
+  it('renders initial query interface without triggering enrollment endpoints before selection', () => {
+    renderWithData(of(sampleStudents), of(sampleClasses));
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.textContent).toContain('Consultar matrículas');
+    expect(root.textContent).toContain('Escolha entre Consultar por aluno ou Consultar por turma');
+
+    expect(enrollmentsApiMock.listEnrollmentsByStudent).not.toHaveBeenCalled();
+    expect(enrollmentsApiMock.listEnrollmentsByAcademicClass).not.toHaveBeenCalled();
+  });
+
+  it('queries enrollments by student when student axis and student are selected', () => {
+    const mockEnrollments: readonly Enrollment[] = [
+      { id: 'enr-1', studentId: 'std-1', academicClassId: 'class-open-1', status: 'CONFIRMED' },
+    ];
+    enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of(mockEnrollments));
+
+    renderWithData(of(sampleStudents), of(sampleClasses));
+    const root = fixture.nativeElement as HTMLElement;
+
+    // Select student query axis
+    const studentRadio = requiredElement<HTMLInputElement>(
+      root,
+      'input[name="queryAxis"][value="student"]',
+    );
+    studentRadio.click();
+    fixture.detectChanges();
+
+    const select = requiredElement<HTMLSelectElement>(root, '#query-student-select');
+    setSelectValue(select, 'std-1');
+    fixture.detectChanges();
+
+    expect(enrollmentsApiMock.listEnrollmentsByStudent).toHaveBeenCalledWith('std-1');
+    expect(enrollmentsApiMock.listEnrollmentsByAcademicClass).not.toHaveBeenCalled();
+
+    expect(root.textContent).toContain('1 matrícula encontrada');
+    expect(root.textContent).toContain('Ana Silva (ana@email.com)');
+    expect(root.textContent).toContain('enr-1');
+    expect(root.textContent).toContain('class-open-1');
+    expect(root.textContent).toContain('Confirmada');
+  });
+
+  it('queries enrollments by class when class axis and class are selected', () => {
+    const mockEnrollments: readonly Enrollment[] = [
+      { id: 'enr-1', studentId: 'std-1', academicClassId: 'class-open-1', status: 'PENDING' },
+      {
+        id: 'enr-2',
+        studentId: 'std-unknown',
+        academicClassId: 'class-open-1',
+        status: 'CANCELED',
+      },
+    ];
+    enrollmentsApiMock.listEnrollmentsByAcademicClass.mockReturnValue(of(mockEnrollments));
+
+    renderWithData(of(sampleStudents), of(sampleClasses));
+    const root = fixture.nativeElement as HTMLElement;
+
+    // Select class query axis
+    const classRadio = requiredElement<HTMLInputElement>(
+      root,
+      'input[name="queryAxis"][value="class"]',
+    );
+    classRadio.click();
+    fixture.detectChanges();
+
+    const select = requiredElement<HTMLSelectElement>(root, '#query-class-select');
+    setSelectValue(select, 'class-open-1');
+    fixture.detectChanges();
+
+    expect(enrollmentsApiMock.listEnrollmentsByAcademicClass).toHaveBeenCalledWith('class-open-1');
+    expect(enrollmentsApiMock.listEnrollmentsByStudent).not.toHaveBeenCalled();
+
+    expect(root.textContent).toContain('2 matrículas encontradas');
+    expect(root.textContent).toContain('Turma ID: class-open-1');
+
+    // Known student resolved by name and email
+    expect(root.textContent).toContain('Ana Silva (ana@email.com)');
+    expect(root.textContent).toContain('Pendente');
+
+    // Unknown student falls back to UUID and neutral unavailability text
+    expect(root.textContent).toContain('std-unknown');
+    expect(root.textContent).toContain('(Dados do aluno indisponíveis)');
+    expect(root.textContent).toContain('Cancelada');
+  });
+
+  it('displays empty query results message without asserting nonexistence', () => {
+    enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of([]));
+    enrollmentsApiMock.listEnrollmentsByAcademicClass.mockReturnValue(of([]));
+
+    renderWithData(of(sampleStudents), of(sampleClasses));
+    const root = fixture.nativeElement as HTMLElement;
+
+    // Test student empty query
+    const studentRadio = requiredElement<HTMLInputElement>(
+      root,
+      'input[name="queryAxis"][value="student"]',
+    );
+    studentRadio.click();
+    fixture.detectChanges();
+
+    setSelectValue(requiredElement(root, '#query-student-select'), 'std-1');
+    fixture.detectChanges();
+
+    expect(root.textContent).toContain('Nenhuma matrícula encontrada para este aluno.');
+
+    // Test class empty query
+    const classRadio = requiredElement<HTMLInputElement>(
+      root,
+      'input[name="queryAxis"][value="class"]',
+    );
+    classRadio.click();
+    fixture.detectChanges();
+
+    setSelectValue(requiredElement(root, '#query-class-select'), 'class-open-1');
+    fixture.detectChanges();
+
+    expect(root.textContent).toContain('Nenhuma matrícula encontrada para esta turma.');
+  });
+
+  it('handles query error and retries upon user action', () => {
+    const error500 = new ApiClientError(
+      'api',
+      500,
+      'INTERNAL_ERROR',
+      'Erro ao consultar matrículas.',
+      null,
+    );
+    enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(throwError(() => error500));
+
+    renderWithData(of(sampleStudents), of(sampleClasses));
+    const root = fixture.nativeElement as HTMLElement;
+
+    const studentRadio = requiredElement<HTMLInputElement>(
+      root,
+      'input[name="queryAxis"][value="student"]',
+    );
+    studentRadio.click();
+    fixture.detectChanges();
+
+    setSelectValue(requiredElement(root, '#query-student-select'), 'std-1');
+    fixture.detectChanges();
+
+    expect(root.textContent).toContain('Erro ao consultar matrículas.');
+
+    const mockEnrollments: readonly Enrollment[] = [
+      { id: 'enr-10', studentId: 'std-1', academicClassId: 'class-open-1', status: 'CONFIRMED' },
+    ];
+    enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of(mockEnrollments));
+
+    findButton(root, 'Tentar novamente').click();
+    fixture.detectChanges();
+
+    expect(root.textContent).toContain('1 matrícula encontrada');
+    expect(root.textContent).toContain('enr-10');
+  });
+
+  it('only displays latest query response when selections change rapidly', () => {
+    const std1Subject = new Subject<readonly Enrollment[]>();
+    const std2Subject = new Subject<readonly Enrollment[]>();
+
+    enrollmentsApiMock.listEnrollmentsByStudent.mockImplementation((studentId: string) => {
+      if (studentId === 'std-1') return std1Subject;
+      if (studentId === 'std-2') return std2Subject;
+      return of([]);
+    });
+
+    renderWithData(of(sampleStudents), of(sampleClasses));
+    const root = fixture.nativeElement as HTMLElement;
+
+    const studentRadio = requiredElement<HTMLInputElement>(
+      root,
+      'input[name="queryAxis"][value="student"]',
+    );
+    studentRadio.click();
+    fixture.detectChanges();
+
+    const select = requiredElement<HTMLSelectElement>(root, '#query-student-select');
+
+    // Trigger std-1 query
+    setSelectValue(select, 'std-1');
+    fixture.detectChanges();
+    expect(root.textContent).toContain('Carregando matrículas...');
+
+    // Trigger std-2 query before std-1 finishes
+    setSelectValue(select, 'std-2');
+    fixture.detectChanges();
+
+    // std-1 finishes late
+    std1Subject.next([
+      { id: 'enr-old', studentId: 'std-1', academicClassId: 'class-open-1', status: 'CONFIRMED' },
+    ]);
+    fixture.detectChanges();
+
+    expect(root.textContent).not.toContain('enr-old');
+
+    // std-2 finishes
+    std2Subject.next([
+      { id: 'enr-new', studentId: 'std-2', academicClassId: 'class-open-1', status: 'PENDING' },
+    ]);
+    fixture.detectChanges();
+
+    expect(root.textContent).toContain('enr-new');
+  });
+
   it('populates select options with labels derived from real data', () => {
     renderWithData(of(sampleStudents), of(sampleClasses));
     const root = fixture.nativeElement as HTMLElement;
@@ -75,7 +283,6 @@ describe('EnrollmentsPage', () => {
     expect(classOptions.some((txt) => txt.includes('class-open-1') && txt.includes('Aberta'))).toBe(
       true,
     );
-    // Closed class should NOT be in the options for creation
     expect(classOptions.some((txt) => txt.includes('class-closed-1'))).toBe(false);
   });
 
@@ -150,15 +357,11 @@ describe('EnrollmentsPage', () => {
     submitForm(requiredElement(root, 'form'));
     fixture.detectChanges();
 
-    // Choices preserved in form model
     const pageInstance = fixture.componentInstance;
     expect(studentSelect.value).toBe('std-1');
     expect(pageInstance['enrollmentForm'].controls.academicClassId.value).toBe('class-open-1');
 
-    // Error explained
     expect(root.textContent).toContain('A turma selecionada foi fechada.');
-
-    // Academic classes reloaded
     expect(academicClassesApiMock.listAcademicClasses).toHaveBeenCalled();
   });
 
@@ -186,14 +389,10 @@ describe('EnrollmentsPage', () => {
     submitForm(requiredElement(root, 'form'));
     fixture.detectChanges();
 
-    // Choices preserved
     expect(studentSelect.value).toBe('std-1');
     expect(classSelect.value).toBe('class-open-1');
 
-    // Error explained
     expect(root.textContent).toContain('Matrícula duplicada');
-
-    // Single request was made
     expect(enrollmentsApiMock.enrollStudent).toHaveBeenCalledOnce();
   });
 

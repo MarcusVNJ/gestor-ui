@@ -15,7 +15,7 @@ import { StatusBadge } from '../../shared/ui/status-badge/status-badge';
 import { AcademicClass } from '../academic-classes/academic-classes-api';
 import { Student } from '../students/students-api';
 import { Enrollment } from './enrollments-api';
-import { EnrollmentsViewModel } from './enrollments-viewmodel';
+import { EnrollmentsViewModel, QueryAxis } from './enrollments-viewmodel';
 
 @Component({
   selector: 'app-enrollments-page',
@@ -32,6 +32,11 @@ export class EnrollmentsPage implements OnInit {
   private readonly formDialog = viewChild.required<AppDialog>('formDialog');
   private readonly studentSelectRef = viewChild<ElementRef<HTMLSelectElement>>('studentSelect');
   private readonly classSelectRef = viewChild<ElementRef<HTMLSelectElement>>('classSelect');
+
+  private readonly queryStudentSelectRef =
+    viewChild<ElementRef<HTMLSelectElement>>('queryStudentSelect');
+  private readonly queryClassSelectRef =
+    viewChild<ElementRef<HTMLSelectElement>>('queryClassSelect');
 
   protected readonly isSubmitting = signal(false);
   protected readonly formSummaryError = signal<string | null>(null);
@@ -54,6 +59,27 @@ export class EnrollmentsPage implements OnInit {
 
   ngOnInit(): void {
     this.vm.loadOptions();
+  }
+
+  protected onAxisChange(axis: QueryAxis): void {
+    this.vm.setQueryAxis(axis);
+    setTimeout(() => {
+      if (axis === 'student') {
+        this.queryStudentSelectRef()?.nativeElement.focus();
+      } else if (axis === 'class') {
+        this.queryClassSelectRef()?.nativeElement.focus();
+      }
+    }, 0);
+  }
+
+  protected onStudentSelect(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    this.vm.selectStudent(select.value);
+  }
+
+  protected onClassSelect(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    this.vm.selectClass(select.value);
   }
 
   protected openCreateDialog(trigger?: HTMLElement | EventTarget | null): void {
@@ -109,6 +135,8 @@ export class EnrollmentsPage implements OnInit {
 
         this.createdStudent.set(foundStudent);
         this.createdClass.set(foundClass);
+
+        this.vm.retryQuery();
       },
       error: (error: unknown) => {
         this.isSubmitting.set(false);

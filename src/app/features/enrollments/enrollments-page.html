@@ -19,56 +19,204 @@
 </header>
 
 <section class="enrollments-content" aria-labelledby="enrollments-heading">
-  @if (createdEnrollment(); as created) {
-    <div class="ui-panel enrollment-confirmation-card">
-      <div class="enrollment-confirmation-card__header">
-        <h2 class="ui-section-title">Última matrícula realizada</h2>
-        <app-status-badge [status]="created.status" />
-      </div>
-      <dl class="enrollment-details-list">
-        <div class="enrollment-detail-item">
-          <dt class="ui-label">ID da matrícula:</dt>
-          <dd class="enrollment-detail-item__value">{{ created.id }}</dd>
-        </div>
-        <div class="enrollment-detail-item">
-          <dt class="ui-label">Aluno:</dt>
-          <dd class="enrollment-detail-item__value">
-            @if (createdStudent(); as std) {
-              {{ std.name }} ({{ std.email }})
-            } @else {
-              {{ created.studentId }}
-            }
-          </dd>
-        </div>
-        <div class="enrollment-detail-item">
-          <dt class="ui-label">Turma:</dt>
-          <dd class="enrollment-detail-item__value">{{ created.academicClassId }}</dd>
-        </div>
-        <div class="enrollment-detail-item">
-          <dt class="ui-label">Situação:</dt>
-          <dd class="enrollment-detail-item__value">Pendente</dd>
-        </div>
-      </dl>
-      <div class="ui-actions">
-        <button
-          type="button"
-          class="ui-button ui-button--primary"
-          (click)="openCreateDialog(newEnrollmentButton)"
+  <div class="ui-panel query-controls-panel">
+    <h2 class="ui-section-title">Consultar matrículas</h2>
+
+    <div class="ui-field">
+      <span class="ui-label" id="axis-selection-label">Tipo de consulta</span>
+      <div class="axis-buttons" role="radiogroup" aria-labelledby="axis-selection-label">
+        <label
+          class="axis-option-label"
+          [class.axis-option-label--selected]="vm.selectedAxis() === 'student'"
         >
-          Nova matrícula
-        </button>
+          <input
+            type="radio"
+            name="queryAxis"
+            value="student"
+            [checked]="vm.selectedAxis() === 'student'"
+            (change)="onAxisChange('student')"
+          />
+          <span>Consultar por aluno</span>
+        </label>
+
+        <label
+          class="axis-option-label"
+          [class.axis-option-label--selected]="vm.selectedAxis() === 'class'"
+        >
+          <input
+            type="radio"
+            name="queryAxis"
+            value="class"
+            [checked]="vm.selectedAxis() === 'class'"
+            (change)="onAxisChange('class')"
+          />
+          <span>Consultar por turma</span>
+        </label>
       </div>
     </div>
-  } @else {
-    <div class="ui-panel enrollment-guidance-card">
-      <h2 class="ui-section-title">Gestão de matrículas</h2>
+
+    @if (vm.selectedAxis() === 'student') {
+      <div class="ui-field">
+        <label for="query-student-select" class="ui-label">Aluno</label>
+        <select
+          #queryStudentSelect
+          id="query-student-select"
+          class="ui-control"
+          [value]="vm.selectedStudentId()"
+          (change)="onStudentSelect($event)"
+        >
+          <option value="">
+            {{ vm.isStudentsLoading() ? 'Carregando alunos...' : 'Selecione um aluno...' }}
+          </option>
+          @for (student of vm.students(); track student.id) {
+            <option [value]="student.id">{{ student.name }} ({{ student.email }})</option>
+          }
+        </select>
+        <p class="ui-field-help">
+          Selecione o aluno para listar todas as suas matrículas vinculadas.
+        </p>
+      </div>
+    }
+
+    @if (vm.selectedAxis() === 'class') {
+      <div class="ui-field">
+        <label for="query-class-select" class="ui-label">Turma</label>
+        <select
+          #queryClassSelect
+          id="query-class-select"
+          class="ui-control"
+          [value]="vm.selectedClassId()"
+          (change)="onClassSelect($event)"
+        >
+          <option value="">
+            {{ vm.isClassesLoading() ? 'Carregando turmas...' : 'Selecione uma turma...' }}
+          </option>
+          @for (cls of vm.academicClasses(); track cls.id) {
+            <option [value]="cls.id">
+              {{ cls.id }} ({{ cls.openingStatus === 'OPEN' ? 'Aberta' : 'Fechada' }},
+              {{ cls.seatLimit }} {{ cls.seatLimit === 1 ? 'vaga' : 'vagas' }})
+            </option>
+          }
+        </select>
+        <p class="ui-field-help">
+          Selecione a turma para listar todos os alunos nela matriculados.
+        </p>
+      </div>
+    }
+  </div>
+
+  @let query = vm.queryState();
+
+  @if (query.status === 'idle') {
+    <div class="ui-panel query-idle-card">
       <p>
-        Para efetuar a matrícula de um aluno em uma turma aberta, clique no botão
-        <strong>Nova matrícula</strong> acima.
+        Escolha entre <strong>Consultar por aluno</strong> ou <strong>Consultar por turma</strong> e
+        selecione um registro para visualizar os resultados.
       </p>
-      <p class="ui-metadata">
-        A matrícula será criada com situação <strong>Pendente</strong> até sua confirmação.
-      </p>
+    </div>
+  }
+
+  @if (query.status === 'loading') {
+    <div class="ui-async-state" role="status" aria-live="polite">
+      <p>Carregando matrículas...</p>
+    </div>
+  }
+
+  @if (query.status === 'error') {
+    <div class="ui-async-state" role="alert">
+      <p>{{ query.message }}</p>
+      <button type="button" class="ui-button ui-button--secondary" (click)="vm.retryQuery()">
+        Tentar novamente
+      </button>
+    </div>
+  }
+
+  @if (query.status === 'empty') {
+    <div class="ui-async-state" role="status">
+      @if (query.axis === 'student') {
+        <p>Nenhuma matrícula encontrada para este aluno.</p>
+      } @else {
+        <p>Nenhuma matrícula encontrada para esta turma.</p>
+      }
+    </div>
+  }
+
+  @if (query.status === 'success') {
+    <div class="query-results-panel">
+      <div class="query-results-header">
+        <h3 class="ui-section-title">
+          {{ query.enrollments.length }}
+          {{ query.enrollments.length === 1 ? 'matrícula encontrada' : 'matrículas encontradas' }}
+        </h3>
+
+        <div class="query-context-info ui-metadata">
+          @if (query.axis === 'student') {
+            @if (vm.selectedStudent(); as std) {
+              <span><strong>Aluno:</strong> {{ std.name }} ({{ std.email }})</span>
+            } @else {
+              <span><strong>Aluno ID:</strong> {{ query.targetId }}</span>
+            }
+          } @else {
+            @if (vm.selectedClass(); as cls) {
+              <span><strong>Turma ID:</strong> {{ cls.id }}</span>
+              <span
+                >— <strong>Situação:</strong>
+                {{ cls.openingStatus === 'OPEN' ? 'Aberta' : 'Fechada' }}</span
+              >
+              <span>— <strong>Vagas:</strong> {{ cls.seatLimit }}</span>
+            } @else {
+              <span><strong>Turma ID:</strong> {{ query.targetId }}</span>
+            }
+          }
+        </div>
+      </div>
+
+      <div
+        #tableRegion
+        class="ui-table-region"
+        tabindex="0"
+        role="region"
+        aria-label="Tabela de matrículas consultadas"
+      >
+        <table class="ui-table">
+          <caption class="sr-only">
+            Resultado da consulta de matrículas
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">ID da Matrícula</th>
+              @if (query.axis === 'student') {
+                <th scope="col">Turma (ID)</th>
+              } @else {
+                <th scope="col">Aluno</th>
+              }
+              <th scope="col">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (enrollment of query.enrollments; track enrollment.id) {
+              <tr>
+                <th scope="row" class="enrollment-id">{{ enrollment.id }}</th>
+                @if (query.axis === 'student') {
+                  <td class="enrollment-class-id">{{ enrollment.academicClassId }}</td>
+                } @else {
+                  <td class="enrollment-student-info">
+                    @if (vm.getStudentById(enrollment.studentId); as std) {
+                      {{ std.name }} ({{ std.email }})
+                    } @else {
+                      {{ enrollment.studentId }}
+                      <span class="ui-metadata">(Dados do aluno indisponíveis)</span>
+                    }
+                  </td>
+                }
+                <td>
+                  <app-status-badge [status]="enrollment.status" />
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     </div>
   }
 </section>
