@@ -11,6 +11,8 @@ describe('EnrollmentsPage', () => {
   let fixture: ComponentFixture<EnrollmentsPage>;
   let enrollmentsApiMock: {
     enrollStudent: ReturnType<typeof vi.fn>;
+    confirmEnrollment: ReturnType<typeof vi.fn>;
+    cancelEnrollment: ReturnType<typeof vi.fn>;
     listEnrollmentsByStudent: ReturnType<typeof vi.fn>;
     listEnrollmentsByAcademicClass: ReturnType<typeof vi.fn>;
   };
@@ -34,6 +36,8 @@ describe('EnrollmentsPage', () => {
   beforeEach(() => {
     enrollmentsApiMock = {
       enrollStudent: vi.fn(),
+      confirmEnrollment: vi.fn(),
+      cancelEnrollment: vi.fn(),
       listEnrollmentsByStudent: vi.fn(),
       listEnrollmentsByAcademicClass: vi.fn(),
     };
@@ -332,6 +336,48 @@ describe('EnrollmentsPage', () => {
     expect(root.textContent).toContain('Pendente');
   });
 
+  it('clears control apiError when control value changes and displays traceId in error summary', () => {
+    renderWithData(of(sampleStudents), of(sampleClasses));
+    const root = fixture.nativeElement as HTMLElement;
+
+    openCreateDialog(root);
+
+    const error400 = new ApiClientError(
+      'api',
+      400,
+      'VALIDATION_FAILED',
+      'Revise os dados informados.',
+      'trace-enr-123',
+      [
+        { field: 'studentId', message: 'Aluno indisponível.' },
+        { field: 'global', message: 'Restrição do sistema.' },
+      ],
+    );
+    enrollmentsApiMock.enrollStudent.mockReturnValue(throwError(() => error400));
+
+    const studentSelect = requiredElement<HTMLSelectElement>(root, '#enrollment-student');
+    const classSelect = requiredElement<HTMLSelectElement>(root, '#enrollment-class');
+
+    setSelectValue(studentSelect, 'std-1');
+    setSelectValue(classSelect, 'class-open-1');
+
+    submitForm(requiredElement(root, 'form'));
+    fixture.detectChanges();
+
+    expect(requiredElement(root, '#enrollment-student-error').textContent).toContain(
+      'Aluno indisponível.',
+    );
+    expect(requiredElement(root, 'form .ui-message--danger').textContent).toContain(
+      'Código para suporte: trace-enr-123',
+    );
+
+    // Change selection
+    setSelectValue(studentSelect, 'std-2');
+    fixture.detectChanges();
+
+    expect(root.querySelector('#enrollment-student-error')).toBeNull();
+  });
+
   it('handles 400 error (e.g. class closed before submit): preserves selections, shows summary error and updates classes', () => {
     renderWithData(of(sampleStudents), of(sampleClasses));
     const root = fixture.nativeElement as HTMLElement;
@@ -456,6 +502,227 @@ describe('EnrollmentsPage', () => {
     fixture.detectChanges();
 
     expect(document.activeElement).toBe(newBtn);
+  });
+
+  describe('Enrollment status transitions & action button matrix', () => {
+    it('renders correct action button matrix by enrollment status (PENDING -> Confirm, CONFIRMED -> Cancel, CANCELED -> None)', () => {
+      const mockEnrollments: readonly Enrollment[] = [
+        {
+          id: 'enr-pending',
+          studentId: 'std-1',
+          academicClassId: 'class-open-1',
+          status: 'PENDING',
+        },
+        {
+          id: 'enr-confirmed',
+          studentId: 'std-1',
+          academicClassId: 'class-open-1',
+          status: 'CONFIRMED',
+        },
+        {
+          id: 'enr-canceled',
+          studentId: 'std-1',
+          academicClassId: 'class-open-1',
+          status: 'CANCELED',
+        },
+      ];
+      enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of(mockEnrollments));
+
+      renderWithData(of(sampleStudents), of(sampleClasses));
+      const root = fixture.nativeElement as HTMLElement;
+
+      const studentRadio = requiredElement<HTMLInputElement>(
+        root,
+        'input[name="queryAxis"][value="student"]',
+      );
+      studentRadio.click();
+      fixture.detectChanges();
+
+      setSelectValue(requiredElement(root, '#query-student-select'), 'std-1');
+      fixture.detectChanges();
+
+      const rowPending = requiredElement(root, '#enrollment-row-enr-pending');
+      expect(findButton(rowPending, 'Confirmar matrícula')).toBeDefined();
+
+      const rowConfirmed = requiredElement(root, '#enrollment-row-enr-confirmed');
+      expect(findButton(rowConfirmed, 'Cancelar matrícula')).toBeDefined();
+
+      const rowCanceled = requiredElement(root, '#enrollment-row-enr-canceled');
+      expect(rowCanceled.textContent).toContain('Nenhuma ação disponível');
+      expect(rowCanceled.querySelector('button')).toBeNull();
+    });
+
+    it('confirms pending enrollment successfully and shows feedback message and live announcement', () => {
+      const mockEnrollments: readonly Enrollment[] = [
+        { id: 'enr-1', studentId: 'std-1', academicClassId: 'class-open-1', status: 'PENDING' },
+      ];
+      enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of(mockEnrollments));
+      enrollmentsApiMock.confirmEnrollment.mockReturnValue(
+        of({
+          id: 'enr-1',
+          studentId: 'std-1',
+          academicClassId: 'class-open-1',
+          status: 'CONFIRMED',
+        }),
+      );
+
+      renderWithData(of(sampleStudents), of(sampleClasses));
+      const root = fixture.nativeElement as HTMLElement;
+
+      requiredElement<HTMLInputElement>(root, 'input[name="queryAxis"][value="student"]').click();
+      fixture.detectChanges();
+      setSelectValue(requiredElement(root, '#query-student-select'), 'std-1');
+      fixture.detectChanges();
+
+      const confirmBtn = findButton(root, 'Confirmar matrícula');
+      confirmBtn.click();
+      fixture.detectChanges();
+
+      expect(enrollmentsApiMock.confirmEnrollment).toHaveBeenCalledWith('enr-1');
+      expect(root.textContent).toContain('Matrícula confirmada com sucesso.');
+      expect(requiredElement(root, '.sr-only[role="status"]').textContent).toContain(
+        'Matrícula confirmada',
+      );
+    });
+
+    it('handles 409 capacity conflict error when confirming enrollment without auto retrying query', () => {
+      const mockEnrollments: readonly Enrollment[] = [
+        { id: 'enr-1', studentId: 'std-1', academicClassId: 'class-open-1', status: 'PENDING' },
+      ];
+      enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of(mockEnrollments));
+      const error409 = new ApiClientError(
+        'api',
+        409,
+        'CLASS_FULL',
+        'Não há vagas disponíveis na turma para confirmar esta matrícula no momento.',
+        'trace-409',
+      );
+      enrollmentsApiMock.confirmEnrollment.mockReturnValue(throwError(() => error409));
+
+      renderWithData(of(sampleStudents), of(sampleClasses));
+      const root = fixture.nativeElement as HTMLElement;
+
+      requiredElement<HTMLInputElement>(root, 'input[name="queryAxis"][value="student"]').click();
+      fixture.detectChanges();
+      setSelectValue(requiredElement(root, '#query-student-select'), 'std-1');
+      fixture.detectChanges();
+
+      enrollmentsApiMock.listEnrollmentsByStudent.mockClear();
+
+      findButton(root, 'Confirmar matrícula').click();
+      fixture.detectChanges();
+
+      expect(root.textContent).toContain('Não há vagas disponíveis na turma');
+      expect(root.textContent).toContain('Código para suporte: trace-409');
+      expect(enrollmentsApiMock.listEnrollmentsByStudent).not.toHaveBeenCalled();
+    });
+
+    it('handles 409 status conflict or 404 error on confirm by showing error feedback and triggering query reload', () => {
+      const mockEnrollments: readonly Enrollment[] = [
+        { id: 'enr-1', studentId: 'std-1', academicClassId: 'class-open-1', status: 'PENDING' },
+      ];
+      enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of(mockEnrollments));
+      const error409 = new ApiClientError(
+        'api',
+        409,
+        'STATE_CONFLICT',
+        'A situação desta matrícula foi alterada por outro processo.',
+        'trace-conflict',
+      );
+      enrollmentsApiMock.confirmEnrollment.mockReturnValue(throwError(() => error409));
+
+      renderWithData(of(sampleStudents), of(sampleClasses));
+      const root = fixture.nativeElement as HTMLElement;
+
+      requiredElement<HTMLInputElement>(root, 'input[name="queryAxis"][value="student"]').click();
+      fixture.detectChanges();
+      setSelectValue(requiredElement(root, '#query-student-select'), 'std-1');
+      fixture.detectChanges();
+
+      enrollmentsApiMock.listEnrollmentsByStudent.mockClear();
+
+      findButton(root, 'Confirmar matrícula').click();
+      fixture.detectChanges();
+
+      expect(root.textContent).toContain(
+        'A situação desta matrícula foi alterada por outro processo.',
+      );
+      expect(enrollmentsApiMock.listEnrollmentsByStudent).toHaveBeenCalledWith('std-1');
+    });
+
+    it('cancels confirmed enrollment through dialog confirmation and updates UI with live announcement', () => {
+      const mockEnrollments: readonly Enrollment[] = [
+        { id: 'enr-2', studentId: 'std-1', academicClassId: 'class-open-1', status: 'CONFIRMED' },
+      ];
+      enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of(mockEnrollments));
+      enrollmentsApiMock.cancelEnrollment.mockReturnValue(
+        of({
+          id: 'enr-2',
+          studentId: 'std-1',
+          academicClassId: 'class-open-1',
+          status: 'CANCELED',
+        }),
+      );
+
+      renderWithData(of(sampleStudents), of(sampleClasses));
+      const root = fixture.nativeElement as HTMLElement;
+
+      requiredElement<HTMLInputElement>(root, 'input[name="queryAxis"][value="student"]').click();
+      fixture.detectChanges();
+      setSelectValue(requiredElement(root, '#query-student-select'), 'std-1');
+      fixture.detectChanges();
+
+      // Click cancel button in table row to open confirmation dialog
+      const cancelBtn = findButton(root, 'Cancelar matrícula');
+      cancelBtn.click();
+      fixture.detectChanges();
+
+      expect(root.textContent).toContain('Cancelar matrícula?');
+      expect(root.textContent).toContain('Esta ação não pode ser desfeita.');
+
+      // Confirm in dialog
+      const dialog = requiredElement(root, '#cancelDialog');
+      findButton(dialog, 'Confirmar cancelamento').click();
+      fixture.detectChanges();
+
+      expect(enrollmentsApiMock.cancelEnrollment).toHaveBeenCalledWith('enr-2');
+      expect(root.textContent).toContain('Matrícula cancelada com sucesso.');
+      expect(requiredElement(root, '.sr-only[role="status"]').textContent).toContain(
+        'Matrícula cancelada',
+      );
+    });
+
+    it('handles error when canceling enrollment and displays error feedback', () => {
+      const mockEnrollments: readonly Enrollment[] = [
+        { id: 'enr-2', studentId: 'std-1', academicClassId: 'class-open-1', status: 'CONFIRMED' },
+      ];
+      enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of(mockEnrollments));
+      const error500 = new ApiClientError(
+        'api',
+        500,
+        'INTERNAL_ERROR',
+        'Erro ao cancelar matrícula.',
+        'trace-cancel-err',
+      );
+      enrollmentsApiMock.cancelEnrollment.mockReturnValue(throwError(() => error500));
+
+      renderWithData(of(sampleStudents), of(sampleClasses));
+      const root = fixture.nativeElement as HTMLElement;
+
+      requiredElement<HTMLInputElement>(root, 'input[name="queryAxis"][value="student"]').click();
+      fixture.detectChanges();
+      setSelectValue(requiredElement(root, '#query-student-select'), 'std-1');
+      fixture.detectChanges();
+
+      findButton(root, 'Cancelar matrícula').click();
+      fixture.detectChanges();
+
+      const dialog = requiredElement(root, '#cancelDialog');
+      findButton(dialog, 'Confirmar cancelamento').click();
+      fixture.detectChanges();
+
+      expect(root.textContent).toContain('Ocorreu uma falha na comunicação com o servidor.');
+    });
   });
 
   function renderWithData(

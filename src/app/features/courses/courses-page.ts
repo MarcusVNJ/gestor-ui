@@ -42,6 +42,11 @@ export const courseNameValidator: ValidatorFn = (
   return null;
 };
 
+export type CourseErrorDetail = {
+  readonly message: string;
+  readonly traceId?: string | null;
+};
+
 @Component({
   selector: 'app-courses-page',
   standalone: true,
@@ -59,14 +64,16 @@ export class CoursesPage implements OnInit {
   private readonly deleteDialog = viewChild.required<AppDialog>('deleteDialog');
   private readonly headingRef = viewChild<ElementRef<HTMLHeadingElement>>('heading');
   private readonly tableRegionRef = viewChild<ElementRef<HTMLDivElement>>('tableRegion');
+  private readonly formSummaryRef = viewChild<ElementRef<HTMLDivElement>>('formSummaryRef');
+  private readonly nameInputRef = viewChild<ElementRef<HTMLInputElement>>('nameInput');
 
   protected readonly formMode = signal<FormMode>('create');
   protected readonly editingCourse = signal<Course | null>(null);
   protected readonly courseToDelete = signal<Course | null>(null);
   protected readonly isSubmitting = signal(false);
   protected readonly isDeleting = signal(false);
-  protected readonly formSummaryError = signal<string | null>(null);
-  protected readonly deleteError = signal<string | null>(null);
+  protected readonly formSummaryError = signal<CourseErrorDetail | null>(null);
+  protected readonly deleteError = signal<CourseErrorDetail | null>(null);
 
   protected readonly courseForm = new FormGroup({
     name: new FormControl('', {
@@ -79,6 +86,11 @@ export class CoursesPage implements OnInit {
 
   ngOnInit(): void {
     this.vm.loadCourses();
+    this.courseForm.controls.name.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.clearNameApiError();
+      });
   }
 
   protected openCreateDialog(trigger?: HTMLElement | EventTarget | null): void {
@@ -113,13 +125,15 @@ export class CoursesPage implements OnInit {
     this.clearNameApiError();
     this.courseForm.markAllAsTouched();
     if (this.courseForm.invalid) {
+      this.nameInputRef()?.nativeElement.focus();
       return;
     }
 
     const mode = this.formMode();
     const editingCourse = this.editingCourse();
     if (mode === 'edit' && editingCourse === null) {
-      this.formSummaryError.set('Não foi possível identificar o curso selecionado.');
+      this.formSummaryError.set({ message: 'Não foi possível identificar o curso selecionado.' });
+      setTimeout(() => this.formSummaryRef()?.nativeElement.focus(), 0);
       return;
     }
 
@@ -181,7 +195,7 @@ export class CoursesPage implements OnInit {
       .subscribe({
         next: () => {
           this.isDeleting.set(false);
-          this.deleteDialog().close();
+          this.deleteDialog().close(true);
           this.courseToDelete.set(null);
           this.scheduleFocusFallback(false);
         },
@@ -189,12 +203,16 @@ export class CoursesPage implements OnInit {
           this.isDeleting.set(false);
           const apiError = normalizeApiError(error);
           if (apiError.status === 404) {
-            this.deleteDialog().close();
+            this.deleteDialog().close(true);
             this.courseToDelete.set(null);
             this.scheduleFocusFallback(true);
             return;
           }
-          this.deleteError.set(apiError.detail || 'Não foi possível excluir o curso.');
+          let message = apiError.detail || 'Não foi possível excluir o curso.';
+          if (apiError.kind === 'network' || apiError.status === 500) {
+            message = `${message} Atualize a lista para verificar o estado real antes de tentar novamente.`;
+          }
+          this.deleteError.set({ message, traceId: apiError.traceId });
         },
       });
   }
@@ -244,13 +262,27 @@ export class CoursesPage implements OnInit {
       control.markAsTouched();
     }
 
+    let summaryMessage: string | null = null;
     if (unknownViolations.length > 0) {
-      this.formSummaryError.set(unknownViolations.join(' '));
+      summaryMessage = unknownViolations.join(' ');
     } else if (nameViolation === null) {
-      this.formSummaryError.set(
-        error.detail || 'Não foi possível salvar o curso. Tente novamente.',
-      );
+      summaryMessage = error.detail || 'Não foi possível salvar o curso. Tente novamente.';
+      if (error.kind === 'network' || error.status === 500) {
+        summaryMessage = `${summaryMessage} Atualize a lista para verificar o estado real antes de tentar novamente.`;
+      }
     }
+
+    if (summaryMessage) {
+      this.formSummaryError.set({ message: summaryMessage, traceId: error.traceId });
+    }
+
+    setTimeout(() => {
+      if (this.formSummaryError()) {
+        this.formSummaryRef()?.nativeElement.focus();
+      } else {
+        this.nameInputRef()?.nativeElement.focus();
+      }
+    }, 0);
   }
 
   private scheduleFocusFallback(always: boolean): void {

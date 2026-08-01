@@ -16,6 +16,8 @@ describe('EnrollmentsViewModel', () => {
   let viewModel: EnrollmentsViewModel;
   let enrollmentsApiMock: {
     enrollStudent: ReturnType<typeof vi.fn>;
+    confirmEnrollment: ReturnType<typeof vi.fn>;
+    cancelEnrollment: ReturnType<typeof vi.fn>;
     listEnrollmentsByStudent: ReturnType<typeof vi.fn>;
     listEnrollmentsByAcademicClass: ReturnType<typeof vi.fn>;
   };
@@ -40,6 +42,8 @@ describe('EnrollmentsViewModel', () => {
   beforeEach(() => {
     enrollmentsApiMock = {
       enrollStudent: vi.fn(),
+      confirmEnrollment: vi.fn(),
+      cancelEnrollment: vi.fn(),
       listEnrollmentsByStudent: vi.fn(),
       listEnrollmentsByAcademicClass: vi.fn(),
     };
@@ -190,6 +194,7 @@ describe('EnrollmentsViewModel', () => {
       axis: 'student',
       targetId: 'std-1',
       message: 'Falha na consulta',
+      traceId: null,
     });
 
     const mockEnrollments: readonly Enrollment[] = [
@@ -367,5 +372,81 @@ describe('EnrollmentsViewModel', () => {
     expect(caughtError).toBe(apiError);
     expect(studentsApiMock.listStudents).toHaveBeenCalled();
     expect(academicClassesApiMock.listAcademicClasses).toHaveBeenCalled();
+  });
+
+  it('should confirm enrollment and update enrollment in current query state', () => {
+    const initialEnrollments: readonly Enrollment[] = [
+      { id: 'enr-1', studentId: 'std-1', academicClassId: 'class-1', status: 'PENDING' },
+      { id: 'enr-2', studentId: 'std-1', academicClassId: 'class-2', status: 'CONFIRMED' },
+    ];
+    enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of(initialEnrollments));
+
+    viewModel.setQueryAxis('student');
+    viewModel.selectStudent('std-1');
+
+    const confirmed: Enrollment = {
+      id: 'enr-1',
+      studentId: 'std-1',
+      academicClassId: 'class-1',
+      status: 'CONFIRMED',
+    };
+    enrollmentsApiMock.confirmEnrollment.mockReturnValue(of(confirmed));
+
+    let result: Enrollment | undefined;
+    viewModel.confirmEnrollment('enr-1').subscribe((res) => (result = res));
+
+    expect(result).toEqual(confirmed);
+    expect(enrollmentsApiMock.confirmEnrollment).toHaveBeenCalledWith('enr-1');
+
+    const state = viewModel.queryState();
+    expect(state.status).toBe('success');
+    if (state.status === 'success') {
+      expect(state.enrollments.find((e) => e.id === 'enr-1')?.status).toBe('CONFIRMED');
+    }
+  });
+
+  it('should cancel enrollment and update enrollment in current query state keeping items sorted', () => {
+    const initialEnrollments: readonly Enrollment[] = [
+      { id: 'enr-1', studentId: 'std-1', academicClassId: 'class-1', status: 'PENDING' },
+      { id: 'enr-2', studentId: 'std-1', academicClassId: 'class-2', status: 'CONFIRMED' },
+    ];
+    enrollmentsApiMock.listEnrollmentsByStudent.mockReturnValue(of(initialEnrollments));
+
+    viewModel.setQueryAxis('student');
+    viewModel.selectStudent('std-1');
+
+    const canceled: Enrollment = {
+      id: 'enr-2',
+      studentId: 'std-1',
+      academicClassId: 'class-2',
+      status: 'CANCELED',
+    };
+    enrollmentsApiMock.cancelEnrollment.mockReturnValue(of(canceled));
+
+    let result: Enrollment | undefined;
+    viewModel.cancelEnrollment('enr-2').subscribe((res) => (result = res));
+
+    expect(result).toEqual(canceled);
+    expect(enrollmentsApiMock.cancelEnrollment).toHaveBeenCalledWith('enr-2');
+
+    const state = viewModel.queryState();
+    expect(state.status).toBe('success');
+    if (state.status === 'success') {
+      expect(state.enrollments.find((e) => e.id === 'enr-2')?.status).toBe('CANCELED');
+      // Verify sorting order (PENDING first, then CANCELED)
+      expect(state.enrollments.map((e) => e.id)).toEqual(['enr-1', 'enr-2']);
+    }
+  });
+
+  it('should normalize and rethrow error when confirmEnrollment fails', () => {
+    const apiError = new ApiClientError('api', 409, 'CLASS_FULL', 'Sem vagas disponíveis.', null);
+    enrollmentsApiMock.confirmEnrollment.mockReturnValue(throwError(() => apiError));
+
+    let caughtError: unknown;
+    viewModel.confirmEnrollment('enr-1').subscribe({
+      error: (err) => (caughtError = err),
+    });
+
+    expect(caughtError).toBe(apiError);
   });
 });

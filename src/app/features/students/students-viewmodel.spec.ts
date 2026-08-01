@@ -82,13 +82,13 @@ describe('StudentsViewModel', () => {
       expect(viewModel.itemCount()).toBe(0);
     });
 
-    it('sets state to error when API fails', () => {
+    it('sets state to error when API fails and captures errorTraceId', () => {
       const error = new ApiClientError(
-        'network',
-        0,
-        null,
+        'api',
+        500,
+        'SERVER_ERROR',
         'Não foi possível conectar ao serviço.',
-        null,
+        'trace-student-err',
       );
       studentsApiMock.listStudents.mockReturnValue(throwError(() => error));
 
@@ -97,6 +97,52 @@ describe('StudentsViewModel', () => {
       expect(viewModel.isLoading()).toBe(false);
       expect(viewModel.isError()).toBe(true);
       expect(viewModel.errorMessage()).toBe('Não foi possível conectar ao serviço.');
+      expect(viewModel.errorTraceId()).toBe('trace-student-err');
+    });
+
+    it('cancels stale queries when multiple load requests are issued in quick succession', () => {
+      const req1$ = new Subject<Student[]>();
+      const req2$ = new Subject<Student[]>();
+
+      studentsApiMock.listStudents.mockReturnValueOnce(req1$).mockReturnValueOnce(req2$);
+
+      viewModel.loadStudents();
+      expect(viewModel.isLoading()).toBe(true);
+
+      viewModel.loadStudents();
+
+      // Emit stale response for req1
+      req1$.next([{ id: '1', name: 'Stale Student', email: 'stale@test.com' }]);
+      req1$.complete();
+
+      // View model should still be loading because req1 was unsubscribed by switchMap
+      expect(viewModel.isLoading()).toBe(true);
+      expect(viewModel.students()).toEqual([]);
+
+      // Emit current response for req2
+      req2$.next([{ id: '2', name: 'Current Student', email: 'current@test.com' }]);
+      req2$.complete();
+
+      expect(viewModel.isLoading()).toBe(false);
+      expect(viewModel.students().length).toBe(1);
+      expect(viewModel.students()[0].name).toBe('Current Student');
+    });
+
+    it('supports retryQuery after a query failure', () => {
+      const error = new ApiClientError('network', 0, null, 'Falha de rede', null);
+      studentsApiMock.listStudents.mockReturnValueOnce(throwError(() => error));
+
+      viewModel.loadStudents();
+      expect(viewModel.isError()).toBe(true);
+
+      const mockStudents: Student[] = [{ id: '1', name: 'Ana', email: 'ana@test.com' }];
+      studentsApiMock.listStudents.mockReturnValueOnce(of(mockStudents));
+
+      viewModel.loadStudents();
+
+      expect(viewModel.isLoading()).toBe(false);
+      expect(viewModel.isError()).toBe(false);
+      expect(viewModel.students()).toEqual(mockStudents);
     });
   });
 

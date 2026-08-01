@@ -119,7 +119,8 @@
 }
 
 .enrollment-confirmation-card,
-.enrollment-guidance-card {
+.enrollment-guidance-card,
+.cancel-confirmation-content {
   display: grid;
   gap: var(--space-4);
 }

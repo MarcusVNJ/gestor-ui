@@ -42,6 +42,11 @@ export const disciplineNameValidator: ValidatorFn = (
   return null;
 };
 
+export type DisciplineErrorDetail = {
+  readonly message: string;
+  readonly traceId?: string | null;
+};
+
 @Component({
   selector: 'app-disciplines-page',
   standalone: true,
@@ -59,14 +64,16 @@ export class DisciplinesPage implements OnInit {
   private readonly deleteDialog = viewChild.required<AppDialog>('deleteDialog');
   private readonly headingRef = viewChild<ElementRef<HTMLHeadingElement>>('heading');
   private readonly tableRegionRef = viewChild<ElementRef<HTMLDivElement>>('tableRegion');
+  private readonly formSummaryRef = viewChild<ElementRef<HTMLDivElement>>('formSummaryRef');
+  private readonly nameInputRef = viewChild<ElementRef<HTMLInputElement>>('nameInput');
 
   protected readonly formMode = signal<FormMode>('create');
   protected readonly editingDiscipline = signal<Discipline | null>(null);
   protected readonly disciplineToDelete = signal<Discipline | null>(null);
   protected readonly isSubmitting = signal(false);
   protected readonly isDeleting = signal(false);
-  protected readonly formSummaryError = signal<string | null>(null);
-  protected readonly deleteError = signal<string | null>(null);
+  protected readonly formSummaryError = signal<DisciplineErrorDetail | null>(null);
+  protected readonly deleteError = signal<DisciplineErrorDetail | null>(null);
 
   protected readonly disciplineForm = new FormGroup({
     name: new FormControl('', {
@@ -79,6 +86,11 @@ export class DisciplinesPage implements OnInit {
 
   ngOnInit(): void {
     this.vm.loadDisciplines();
+    this.disciplineForm.controls.name.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.clearNameApiError();
+      });
   }
 
   protected openCreateDialog(trigger?: HTMLElement | EventTarget | null): void {
@@ -116,13 +128,17 @@ export class DisciplinesPage implements OnInit {
     this.clearNameApiError();
     this.disciplineForm.markAllAsTouched();
     if (this.disciplineForm.invalid) {
+      this.nameInputRef()?.nativeElement.focus();
       return;
     }
 
     const mode = this.formMode();
     const editingDiscipline = this.editingDiscipline();
     if (mode === 'edit' && editingDiscipline === null) {
-      this.formSummaryError.set('Não foi possível identificar a disciplina selecionada.');
+      this.formSummaryError.set({
+        message: 'Não foi possível identificar a disciplina selecionada.',
+      });
+      setTimeout(() => this.formSummaryRef()?.nativeElement.focus(), 0);
       return;
     }
 
@@ -187,7 +203,7 @@ export class DisciplinesPage implements OnInit {
       .subscribe({
         next: () => {
           this.isDeleting.set(false);
-          this.deleteDialog().close();
+          this.deleteDialog().close(true);
           this.disciplineToDelete.set(null);
           this.scheduleFocusFallback(false);
         },
@@ -195,12 +211,16 @@ export class DisciplinesPage implements OnInit {
           this.isDeleting.set(false);
           const apiError = normalizeApiError(error);
           if (apiError.status === 404) {
-            this.deleteDialog().close();
+            this.deleteDialog().close(true);
             this.disciplineToDelete.set(null);
             this.scheduleFocusFallback(true);
             return;
           }
-          this.deleteError.set(apiError.detail || 'Não foi possível excluir a disciplina.');
+          let message = apiError.detail || 'Não foi possível excluir a disciplina.';
+          if (apiError.kind === 'network' || apiError.status === 500) {
+            message = `${message} Atualize a lista para verificar o estado real antes de tentar novamente.`;
+          }
+          this.deleteError.set({ message, traceId: apiError.traceId });
         },
       });
   }
@@ -250,13 +270,27 @@ export class DisciplinesPage implements OnInit {
       control.markAsTouched();
     }
 
+    let summaryMessage: string | null = null;
     if (unknownViolations.length > 0) {
-      this.formSummaryError.set(unknownViolations.join(' '));
+      summaryMessage = unknownViolations.join(' ');
     } else if (nameViolation === null) {
-      this.formSummaryError.set(
-        error.detail || 'Não foi possível salvar a disciplina. Tente novamente.',
-      );
+      summaryMessage = error.detail || 'Não foi possível salvar a disciplina. Tente novamente.';
+      if (error.kind === 'network' || error.status === 500) {
+        summaryMessage = `${summaryMessage} Atualize a lista para verificar o estado real antes de tentar novamente.`;
+      }
     }
+
+    if (summaryMessage) {
+      this.formSummaryError.set({ message: summaryMessage, traceId: error.traceId });
+    }
+
+    setTimeout(() => {
+      if (this.formSummaryError()) {
+        this.formSummaryRef()?.nativeElement.focus();
+      } else {
+        this.nameInputRef()?.nativeElement.focus();
+      }
+    }, 0);
   }
 
   private scheduleFocusFallback(always: boolean): void {

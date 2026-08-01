@@ -247,6 +247,37 @@ describe('DisciplinesPage', () => {
     expect(document.activeElement).toBe(createButton);
   });
 
+  it('clears control apiError when control value changes and displays traceId in error summary', () => {
+    renderWith(of([]));
+    const root = fixture.nativeElement as HTMLElement;
+    openCreateDialog(root);
+
+    const validationError = new ApiClientError(
+      'api',
+      400,
+      'VALIDATION_ERROR',
+      'Dados inválidos.',
+      'trace-disc-123',
+      [{ field: 'name', message: 'Nome de disciplina já utilizado.' }],
+    );
+    disciplinesApiMock.registerDiscipline.mockReturnValue(throwError(() => validationError));
+
+    const nameInput = requiredElement<HTMLInputElement>(root, '#discipline-name');
+    setInputValue(nameInput, 'Cálculo I');
+    submit(requiredElement(root, 'form'));
+    fixture.detectChanges();
+
+    expect(requiredElement(root, '#discipline-name-error').textContent).toContain(
+      'Nome de disciplina já utilizado.',
+    );
+
+    // User edits the field value
+    setInputValue(nameInput, 'Cálculo II');
+    fixture.detectChanges();
+
+    expect(root.querySelector('#discipline-name-error')).toBeNull();
+  });
+
   function renderWith(disciplines: Observable<readonly Discipline[]>): void {
     disciplinesApiMock.listDisciplines.mockReturnValue(disciplines);
     createFixture();

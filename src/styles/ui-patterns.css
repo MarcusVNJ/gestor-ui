@@ -241,6 +241,21 @@ textarea.ui-control {
   color: var(--color-danger);
 }
 
+.ui-support-code {
+  margin-block-start: var(--space-1);
+  margin-block-end: 0;
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}
+
+.ui-support-code code {
+  font-family: monospace;
+  font-weight: var(--font-weight-semibold);
+  user-select: all;
+  -webkit-user-select: all;
+}
+
 .ui-badge {
   display: inline-flex;
   align-items: center;

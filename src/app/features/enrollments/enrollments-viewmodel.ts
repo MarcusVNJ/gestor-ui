@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Observable, Subject, catchError, concat, map, of, switchMap, throwError } from 'rxjs';
+import { Observable, Subject, catchError, concat, map, of, switchMap, tap, throwError } from 'rxjs';
 
 import { normalizeApiError } from '../../core/api/api-error';
 import {
@@ -10,6 +10,8 @@ import {
 } from '../academic-classes/academic-classes-api';
 import { Student, StudentsApi } from '../students/students-api';
 import {
+  CanceledEnrollment,
+  ConfirmedEnrollment,
   EnrollStudentRequest,
   Enrollment,
   EnrollmentStatus,
@@ -33,7 +35,13 @@ export type QueryState =
   | { status: 'loading'; axis: QueryAxis; targetId: string }
   | { status: 'empty'; axis: QueryAxis; targetId: string }
   | { status: 'success'; axis: QueryAxis; targetId: string; enrollments: readonly Enrollment[] }
-  | { status: 'error'; axis: QueryAxis; targetId: string; message: string };
+  | {
+      status: 'error';
+      axis: QueryAxis;
+      targetId: string;
+      message: string;
+      traceId?: string | null;
+    };
 
 const STATUS_PRIORITY: Record<OpeningStatus, number> = {
   OPEN: 1,
@@ -106,6 +114,10 @@ export class EnrollmentsViewModel {
   readonly selectedStudentId = this.selectedStudentIdSignal.asReadonly();
   readonly selectedClassId = this.selectedClassIdSignal.asReadonly();
   readonly queryState = this.queryStateSignal.asReadonly();
+  readonly queryErrorTraceId = computed(() => {
+    const state = this.queryStateSignal();
+    return state.status === 'error' ? (state.traceId ?? null) : null;
+  });
 
   readonly isStudentsLoading = computed(() => this.studentsListState().status === 'loading');
   readonly isStudentsError = computed(() => this.studentsListState().status === 'error');
@@ -240,6 +252,7 @@ export class EnrollmentsViewModel {
                   axis,
                   targetId: id,
                   message: apiError.detail || 'Não foi possível carregar as matrículas.',
+                  traceId: apiError.traceId,
                 });
               }),
             ),
@@ -309,5 +322,45 @@ export class EnrollmentsViewModel {
         return throwError(() => apiError);
       }),
     );
+  }
+
+  confirmEnrollment(id: string): Observable<ConfirmedEnrollment> {
+    return this.enrollmentsApi.confirmEnrollment(id).pipe(
+      tap((confirmed) => {
+        this.updateEnrollmentInCurrentQuery(confirmed);
+      }),
+      catchError((error: unknown) => {
+        const apiError = normalizeApiError(error);
+        return throwError(() => apiError);
+      }),
+    );
+  }
+
+  cancelEnrollment(id: string): Observable<CanceledEnrollment> {
+    return this.enrollmentsApi.cancelEnrollment(id).pipe(
+      tap((canceled) => {
+        this.updateEnrollmentInCurrentQuery(canceled);
+      }),
+      catchError((error: unknown) => {
+        const apiError = normalizeApiError(error);
+        return throwError(() => apiError);
+      }),
+    );
+  }
+
+  private updateEnrollmentInCurrentQuery(updated: Enrollment): void {
+    const current = this.queryStateSignal();
+    if (current.status === 'success') {
+      const exists = current.enrollments.some((e) => e.id === updated.id);
+      if (exists) {
+        const updatedEnrollments = current.enrollments.map((e) =>
+          e.id === updated.id ? updated : e,
+        );
+        this.queryStateSignal.set({
+          ...current,
+          enrollments: sortEnrollments(updatedEnrollments),
+        });
+      }
+    }
   }
 }

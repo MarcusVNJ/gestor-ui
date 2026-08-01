@@ -248,6 +248,50 @@ describe('StudentsPage', () => {
     });
   });
 
+  it('clears control apiError when control value changes and displays traceId in error summary', () => {
+    studentsApiMock.listStudents.mockReturnValue(of([]));
+    fixture = TestBed.createComponent(StudentsPage);
+    fixture.detectChanges();
+    setupDialogMocks(fixture.nativeElement);
+
+    const root = fixture.nativeElement as HTMLElement;
+    root.querySelector<HTMLButtonElement>('header button')?.click();
+    fixture.detectChanges();
+
+    const validationError = new ApiClientError(
+      'api',
+      400,
+      'VALIDATION_ERROR',
+      'Dados inválidos.',
+      'trace-student-123',
+      [{ field: 'email', message: 'E-mail já está em uso.' }],
+    );
+    studentsApiMock.signUpStudent.mockReturnValue(throwError(() => validationError));
+
+    const nameInput = root.querySelector<HTMLInputElement>('#student-name')!;
+    const emailInput = root.querySelector<HTMLInputElement>('#student-email')!;
+
+    nameInput.value = 'Carlos';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    emailInput.value = 'carlos@test.com';
+    emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const form = root.querySelector<HTMLFormElement>('form')!;
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+
+    expect(root.querySelector('#student-email-error')?.textContent).toContain(
+      'E-mail já está em uso.',
+    );
+
+    // User modifies email input
+    emailInput.value = 'carlos.novo@test.com';
+    emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(root.querySelector('#student-email-error')).toBeNull();
+  });
+
   it('shows restriction message in dialog when deletion returns 409 (enrollments)', () => {
     const student: Student = { id: '1', name: 'Eduardo', email: 'eduardo@test.com' };
     studentsApiMock.listStudents.mockReturnValue(of([student]));

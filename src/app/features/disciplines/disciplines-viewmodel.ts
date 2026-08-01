@@ -14,7 +14,12 @@ export type DisciplinesListState =
   | { status: 'loading' }
   | { status: 'success'; disciplines: readonly Discipline[] }
   | { status: 'updating'; disciplines: readonly Discipline[] }
-  | { status: 'error'; message: string; disciplines: readonly Discipline[] | null };
+  | {
+      status: 'error';
+      message: string;
+      traceId?: string | null;
+      disciplines: readonly Discipline[] | null;
+    };
 
 export type DisciplinesNotice = {
   readonly tone: 'success' | 'warning';
@@ -45,6 +50,10 @@ export class DisciplinesViewModel {
     const state = this.listState();
     return state.status === 'error' ? state.message : null;
   });
+  readonly errorTraceId = computed(() => {
+    const state = this.listState();
+    return state.status === 'error' ? (state.traceId ?? null) : null;
+  });
 
   readonly disciplines = computed(() => this.resolvedDisciplines() ?? []);
   readonly hasResolvedDisciplines = computed(() => this.resolvedDisciplines() !== null);
@@ -74,6 +83,7 @@ export class DisciplinesViewModel {
               return of<DisciplinesListState>({
                 status: 'error',
                 message: apiError.detail,
+                traceId: apiError.traceId,
                 disciplines: currentDisciplines,
               });
             }),

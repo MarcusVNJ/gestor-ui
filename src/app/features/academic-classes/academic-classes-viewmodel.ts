@@ -15,7 +15,12 @@ export type AcademicClassesListState =
   | { status: 'loading' }
   | { status: 'success'; academicClasses: readonly AcademicClass[] }
   | { status: 'updating'; academicClasses: readonly AcademicClass[] }
-  | { status: 'error'; message: string; academicClasses: readonly AcademicClass[] | null };
+  | {
+      status: 'error';
+      message: string;
+      traceId?: string | null;
+      academicClasses: readonly AcademicClass[] | null;
+    };
 
 export type AcademicClassesNotice = {
   readonly tone: 'success' | 'warning';
@@ -54,6 +59,10 @@ export class AcademicClassesViewModel {
     const state = this.listState();
     return state.status === 'error' ? state.message : null;
   });
+  readonly errorTraceId = computed(() => {
+    const state = this.listState();
+    return state.status === 'error' ? (state.traceId ?? null) : null;
+  });
 
   readonly academicClasses = computed(() => this.resolvedAcademicClasses() ?? []);
   readonly hasResolvedAcademicClasses = computed(() => this.resolvedAcademicClasses() !== null);
@@ -83,6 +92,7 @@ export class AcademicClassesViewModel {
               return of<AcademicClassesListState>({
                 status: 'error',
                 message: apiError.detail,
+                traceId: apiError.traceId,
                 academicClasses: currentClasses,
               });
             }),

@@ -32,6 +32,11 @@
   } @else if (vm.isError()) {
     <div class="ui-async-state" role="alert">
       <p>{{ vm.errorMessage() }}</p>
+      @if (vm.errorTraceId(); as traceId) {
+        <p class="ui-support-code">
+          Código para suporte: <code>{{ traceId }}</code>
+        </p>
+      }
       <button type="button" class="ui-button ui-button--secondary" (click)="vm.loadStudents()">
         Tentar novamente
       </button>
@@ -102,8 +107,13 @@
 >
   <form [formGroup]="studentForm" (ngSubmit)="submitForm()" class="student-form" novalidate>
     @if (formSummaryError(); as summaryError) {
-      <div class="ui-message ui-message--danger" role="alert">
-        <p>{{ summaryError }}</p>
+      <div #formSummaryRef class="ui-message ui-message--danger" role="alert" tabindex="-1">
+        <p>{{ summaryError.message }}</p>
+        @if (summaryError.traceId) {
+          <p class="ui-support-code">
+            Código para suporte: <code>{{ summaryError.traceId }}</code>
+          </p>
+        }
       </div>
     }
 
@@ -112,6 +122,7 @@
         Nome <span class="required-indicator" aria-hidden="true">*</span>
       </label>
       <input
+        #nameInput
         id="student-name"
         type="text"
         autocomplete="name"
@@ -132,6 +143,7 @@
         E-mail <span class="required-indicator" aria-hidden="true">*</span>
       </label>
       <input
+        #emailInput
         id="student-email"
         type="email"
         autocomplete="email"
@@ -192,7 +204,12 @@
 
     @if (deleteError(); as error) {
       <div class="ui-message ui-message--danger" role="alert">
-        <p>{{ error }}</p>
+        <p>{{ error.message }}</p>
+        @if (error.traceId) {
+          <p class="ui-support-code">
+            Código para suporte: <code>{{ error.traceId }}</code>
+          </p>
+        }
       </div>
     }
   </div>

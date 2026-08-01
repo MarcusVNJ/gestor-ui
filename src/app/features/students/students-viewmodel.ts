@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, map } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Observable, Subject, catchError, map, of, switchMap } from 'rxjs';
 
 import { normalizeApiError } from '../../core/api/api-error';
 import { EditStudentRequest, SignUpStudentRequest, Student, StudentsApi } from './students-api';
@@ -7,7 +8,7 @@ import { EditStudentRequest, SignUpStudentRequest, Student, StudentsApi } from '
 export type StudentsListState =
   | { status: 'loading' }
   | { status: 'success'; students: readonly Student[] }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; traceId?: string | null };
 
 export function sortStudents(students: readonly Student[]): readonly Student[] {
   return [...students].sort((a, b) => {
@@ -22,6 +23,7 @@ export function sortStudents(students: readonly Student[]): readonly Student[] {
 @Injectable()
 export class StudentsViewModel {
   private readonly studentsApi = inject(StudentsApi);
+  private readonly loadRequests = new Subject<void>();
 
   private readonly listState = signal<StudentsListState>({ status: 'loading' });
   private readonly announcementState = signal<string | null>(null);
@@ -35,6 +37,10 @@ export class StudentsViewModel {
     const state = this.listState();
     return state.status === 'error' ? state.message : null;
   });
+  readonly errorTraceId = computed(() => {
+    const state = this.listState();
+    return state.status === 'error' ? (state.traceId ?? null) : null;
+  });
 
   readonly students = computed(() => {
     const state = this.listState();
@@ -46,20 +52,33 @@ export class StudentsViewModel {
     () => this.listState().status === 'success' && this.students().length === 0,
   );
 
+  constructor() {
+    this.loadRequests
+      .pipe(
+        switchMap(() => {
+          this.listState.set({ status: 'loading' });
+          return this.studentsApi.listStudents().pipe(
+            map((students): StudentsListState => ({
+              status: 'success',
+              students: sortStudents(students),
+            })),
+            catchError((error: unknown) => {
+              const apiError = normalizeApiError(error);
+              return of<StudentsListState>({
+                status: 'error',
+                message: apiError.detail,
+                traceId: apiError.traceId,
+              });
+            }),
+          );
+        }),
+        takeUntilDestroyed(),
+      )
+      .subscribe((state) => this.listState.set(state));
+  }
+
   loadStudents(): void {
-    this.listState.set({ status: 'loading' });
-    this.studentsApi.listStudents().subscribe({
-      next: (students) => {
-        this.listState.set({
-          status: 'success',
-          students: sortStudents(students),
-        });
-      },
-      error: (error: unknown) => {
-        const apiError = normalizeApiError(error);
-        this.listState.set({ status: 'error', message: apiError.detail });
-      },
-    });
+    this.loadRequests.next();
   }
 
   setAnnouncement(message: string): void {

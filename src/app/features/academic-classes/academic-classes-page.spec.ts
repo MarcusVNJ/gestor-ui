@@ -315,6 +315,37 @@ describe('AcademicClassesPage', () => {
     expect(document.activeElement).toBe(createButton);
   });
 
+  it('clears control apiError when control value changes and displays traceId in error summary', () => {
+    renderWith(of([]));
+    const root = fixture.nativeElement as HTMLElement;
+    openCreateDialog(root);
+
+    const validationError = new ApiClientError(
+      'api',
+      400,
+      'VALIDATION_ERROR',
+      'Dados inválidos.',
+      'trace-class-123',
+      [{ field: 'seatLimit', message: 'Capacidade máxima excedida.' }],
+    );
+    academicClassesApiMock.registerAcademicClass.mockReturnValue(throwError(() => validationError));
+
+    const seatInput = requiredElement<HTMLInputElement>(root, '#academic-class-seat-limit');
+    setInputValue(seatInput, '10000');
+    submit(requiredElement(root, 'form'));
+    fixture.detectChanges();
+
+    expect(requiredElement(root, '#academic-class-seat-limit-error').textContent).toContain(
+      'Capacidade máxima excedida.',
+    );
+
+    // User edits the field value
+    setInputValue(seatInput, '30');
+    fixture.detectChanges();
+
+    expect(root.querySelector('#academic-class-seat-limit-error')).toBeNull();
+  });
+
   function renderWith(classes: Observable<readonly AcademicClass[]>): void {
     academicClassesApiMock.listAcademicClasses.mockReturnValue(classes);
     createFixture();

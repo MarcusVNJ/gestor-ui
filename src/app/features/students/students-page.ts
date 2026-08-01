@@ -1,13 +1,21 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   OnInit,
   inject,
   signal,
   viewChild,
 } from '@angular/core';
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  AbstractControl,
+  FormControl,
+  FormGroup,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
 
 import { ApiClientError, normalizeApiError } from '../../core/api/api-error';
 import { AppDialog } from '../../shared/ui/app-dialog/app-dialog';
@@ -15,6 +23,11 @@ import { Student } from './students-api';
 import { StudentsViewModel } from './students-viewmodel';
 
 type FormMode = 'create' | 'edit';
+
+export type StudentErrorDetail = {
+  readonly message: string;
+  readonly traceId?: string | null;
+};
 
 @Component({
   selector: 'app-students-page',
@@ -27,11 +40,15 @@ type FormMode = 'create' | 'edit';
 })
 export class StudentsPage implements OnInit {
   protected readonly vm = inject(StudentsViewModel);
+  private readonly destroyRef = inject(DestroyRef);
 
   private readonly formDialog = viewChild.required<AppDialog>('formDialog');
   private readonly deleteDialog = viewChild.required<AppDialog>('deleteDialog');
   private readonly headingRef = viewChild<ElementRef<HTMLHeadingElement>>('heading');
   private readonly tableRegionRef = viewChild<ElementRef<HTMLDivElement>>('tableRegion');
+  private readonly formSummaryRef = viewChild<ElementRef<HTMLDivElement>>('formSummaryRef');
+  private readonly nameInputRef = viewChild<ElementRef<HTMLInputElement>>('nameInput');
+  private readonly emailInputRef = viewChild<ElementRef<HTMLInputElement>>('emailInput');
 
   protected readonly formMode = signal<FormMode>('create');
   protected readonly editingStudent = signal<Student | null>(null);
@@ -39,8 +56,8 @@ export class StudentsPage implements OnInit {
 
   protected readonly isSubmitting = signal(false);
   protected readonly isDeleting = signal(false);
-  protected readonly formSummaryError = signal<string | null>(null);
-  protected readonly deleteError = signal<string | null>(null);
+  protected readonly formSummaryError = signal<StudentErrorDetail | null>(null);
+  protected readonly deleteError = signal<StudentErrorDetail | null>(null);
 
   private triggerElement: HTMLElement | null = null;
 
@@ -57,6 +74,12 @@ export class StudentsPage implements OnInit {
 
   ngOnInit(): void {
     this.vm.loadStudents();
+    this.studentForm.controls.name.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.clearControlApiError(this.studentForm.controls.name));
+    this.studentForm.controls.email.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.clearControlApiError(this.studentForm.controls.email));
   }
 
   protected openCreateDialog(trigger?: HTMLElement | EventTarget | null): void {
@@ -91,8 +114,10 @@ export class StudentsPage implements OnInit {
       return;
     }
 
+    this.clearApiErrors();
     this.studentForm.markAllAsTouched();
     if (this.studentForm.invalid) {
+      this.focusFirstInvalidField();
       return;
     }
 
@@ -102,7 +127,6 @@ export class StudentsPage implements OnInit {
 
     this.isSubmitting.set(true);
     this.formSummaryError.set(null);
-    this.clearApiErrors();
 
     const request = { name: trimmedName, email: trimmedEmail };
     const mode = this.formMode();
@@ -113,7 +137,7 @@ export class StudentsPage implements OnInit {
         ? this.vm.editStudent(studentId, request)
         : this.vm.signUpStudent(request);
 
-    action$.subscribe({
+    action$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.isSubmitting.set(false);
         this.formDialog().close();
@@ -155,37 +179,45 @@ export class StudentsPage implements OnInit {
     this.isDeleting.set(true);
     this.deleteError.set(null);
 
-    this.vm.deleteStudent(student.id).subscribe({
-      next: () => {
-        this.isDeleting.set(false);
-        this.deleteDialog().close();
-        this.studentToDelete.set(null);
-
-        setTimeout(() => {
-          if (this.triggerElement && !document.body.contains(this.triggerElement)) {
-            this.focusHeadingOrTable();
-          }
-        }, 0);
-      },
-      error: (error: unknown) => {
-        this.isDeleting.set(false);
-        const apiError = normalizeApiError(error);
-
-        if (apiError.status === 404) {
-          this.deleteDialog().close();
+    this.vm
+      .deleteStudent(student.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.isDeleting.set(false);
+          this.deleteDialog().close(true);
           this.studentToDelete.set(null);
-          return;
-        }
 
-        if (apiError.status === 409) {
-          this.deleteError.set(
-            apiError.detail || 'Este aluno possui matrículas e não pode ser excluído.',
-          );
-        } else {
-          this.deleteError.set(apiError.detail || 'Não foi possível excluir o aluno.');
-        }
-      },
-    });
+          setTimeout(() => {
+            if (this.triggerElement && !document.body.contains(this.triggerElement)) {
+              this.focusHeadingOrTable();
+            }
+          }, 0);
+        },
+        error: (error: unknown) => {
+          this.isDeleting.set(false);
+          const apiError = normalizeApiError(error);
+
+          if (apiError.status === 404) {
+            this.deleteDialog().close(true);
+            this.studentToDelete.set(null);
+            return;
+          }
+
+          let message: string;
+          if (apiError.status === 409) {
+            message = apiError.detail || 'Este aluno possui matrículas e não pode ser excluído.';
+          } else {
+            message = apiError.detail || 'Não foi possível excluir o aluno.';
+          }
+
+          if (apiError.kind === 'network' || apiError.status === 500) {
+            message = `${message} Atualize a lista para verificar o estado real antes de tentar novamente.`;
+          }
+
+          this.deleteError.set({ message, traceId: apiError.traceId });
+        },
+      });
   }
 
   protected getFieldError(fieldName: 'name' | 'email'): string | null {
@@ -219,32 +251,47 @@ export class StudentsPage implements OnInit {
     return 'Campo inválido.';
   }
 
-  private clearApiErrors(): void {
-    for (const key of ['name', 'email'] as const) {
-      const control = this.studentForm.controls[key];
-      if (control.errors?.['apiError']) {
-        const { apiError: _, ...rest } = control.errors;
-        control.setErrors(Object.keys(rest).length > 0 ? rest : null);
-      }
+  private clearControlApiError(control: AbstractControl): void {
+    if (!control.errors?.['apiError']) {
+      return;
     }
+    const { apiError: _, ...rest } = control.errors;
+    control.setErrors(Object.keys(rest).length > 0 ? rest : null);
+  }
+
+  private clearApiErrors(): void {
+    this.clearControlApiError(this.studentForm.controls.name);
+    this.clearControlApiError(this.studentForm.controls.email);
   }
 
   private handleFormApiError(error: ApiClientError): void {
-    let mapped = false;
+    let nameViolation: string | null = null;
+    let emailViolation: string | null = null;
+    const unknownViolations: string[] = [];
 
-    if (error.violations && error.violations.length > 0) {
-      for (const violation of error.violations) {
-        if (violation.field === 'name') {
-          this.studentForm.controls.name.setErrors({ apiError: violation.message });
-          mapped = true;
-        } else if (violation.field === 'email') {
-          this.studentForm.controls.email.setErrors({ apiError: violation.message });
-          mapped = true;
-        }
+    for (const violation of error.violations) {
+      if (violation.field === 'name' && nameViolation === null) {
+        nameViolation = violation.message;
+      } else if (violation.field === 'email' && emailViolation === null) {
+        emailViolation = violation.message;
+      } else {
+        unknownViolations.push(violation.message);
       }
     }
 
-    if (!mapped && error.status === 409) {
+    if (nameViolation !== null) {
+      const control = this.studentForm.controls.name;
+      control.setErrors({ ...control.errors, apiError: nameViolation });
+      control.markAsTouched();
+    }
+
+    if (emailViolation !== null) {
+      const control = this.studentForm.controls.email;
+      control.setErrors({ ...control.errors, apiError: emailViolation });
+      control.markAsTouched();
+    }
+
+    if (nameViolation === null && emailViolation === null && error.status === 409) {
       const detailLower = error.detail.toLowerCase();
       if (
         error.code === 'EMAIL_CONFLICT' ||
@@ -252,15 +299,42 @@ export class StudentsPage implements OnInit {
         detailLower.includes('e-mail') ||
         detailLower.includes('email')
       ) {
-        this.studentForm.controls.email.setErrors({ apiError: error.detail });
-        mapped = true;
+        emailViolation = error.detail;
+        const control = this.studentForm.controls.email;
+        control.setErrors({ ...control.errors, apiError: emailViolation });
+        control.markAsTouched();
       }
     }
 
-    if (!mapped) {
-      this.formSummaryError.set(
-        error.detail || 'Não foi possível salvar os dados do aluno. Tente novamente.',
-      );
+    let summaryMessage: string | null = null;
+    if (unknownViolations.length > 0) {
+      summaryMessage = unknownViolations.join(' ');
+    } else if (nameViolation === null && emailViolation === null) {
+      summaryMessage =
+        error.detail || 'Não foi possível salvar os dados do aluno. Tente novamente.';
+      if (error.kind === 'network' || error.status === 500) {
+        summaryMessage = `${summaryMessage} Atualize a lista para verificar o estado real antes de tentar novamente.`;
+      }
+    }
+
+    if (summaryMessage) {
+      this.formSummaryError.set({ message: summaryMessage, traceId: error.traceId });
+    }
+
+    setTimeout(() => {
+      if (this.formSummaryError()) {
+        this.formSummaryRef()?.nativeElement.focus();
+      } else {
+        this.focusFirstInvalidField();
+      }
+    }, 0);
+  }
+
+  private focusFirstInvalidField(): void {
+    if (this.studentForm.controls.name.invalid) {
+      this.nameInputRef()?.nativeElement.focus();
+    } else if (this.studentForm.controls.email.invalid) {
+      this.emailInputRef()?.nativeElement.focus();
     }
   }
 

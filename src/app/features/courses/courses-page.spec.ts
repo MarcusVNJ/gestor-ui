@@ -245,6 +245,62 @@ describe('CoursesPage', () => {
     expect(document.activeElement).toBe(createButton);
   });
 
+  it('clears control apiError when control value changes and displays traceId in error summary', () => {
+    renderWith(of([]));
+    const root = fixture.nativeElement as HTMLElement;
+    openCreateDialog(root);
+
+    const validationError = new ApiClientError(
+      'api',
+      400,
+      'VALIDATION_ERROR',
+      'Dados inválidos.',
+      'trace-abc-123',
+      [{ field: 'name', message: 'Nome já utilizado.' }],
+    );
+    coursesApiMock.registerCourse.mockReturnValue(throwError(() => validationError));
+
+    const nameInput = requiredElement<HTMLInputElement>(root, '#course-name');
+    setInputValue(nameInput, 'Engenharia');
+    submit(requiredElement(root, 'form'));
+    fixture.detectChanges();
+
+    expect(requiredElement(root, '#course-name-error').textContent).toContain('Nome já utilizado.');
+
+    // User types a new value in the control
+    setInputValue(nameInput, 'Engenharia Civil');
+    fixture.detectChanges();
+
+    // apiError on the control should be cleared
+    expect(root.querySelector('#course-name-error')).toBeNull();
+  });
+
+  it('displays traceId and uncertainty guidance on 500 server mutation error', () => {
+    renderWith(of([]));
+    const root = fixture.nativeElement as HTMLElement;
+    openCreateDialog(root);
+
+    const serverError = new ApiClientError(
+      'api',
+      500,
+      'SERVER_ERROR',
+      'Ocorreu uma falha interna no servidor.',
+      'trace-500-err',
+    );
+    coursesApiMock.registerCourse.mockReturnValue(throwError(() => serverError));
+
+    setInputValue(requiredElement(root, '#course-name'), 'Arquitetura');
+    submit(requiredElement(root, 'form'));
+    fixture.detectChanges();
+
+    const summary = requiredElement(root, 'form .ui-message--danger');
+    expect(summary.textContent).toContain('Ocorreu uma falha interna no servidor.');
+    expect(summary.textContent).toContain('Código para suporte: trace-500-err');
+    expect(summary.textContent).toContain(
+      'Atualize a lista para verificar o estado real antes de tentar novamente.',
+    );
+  });
+
   function renderWith(courses: Observable<readonly Course[]>): void {
     coursesApiMock.listCourses.mockReturnValue(courses);
     createFixture();

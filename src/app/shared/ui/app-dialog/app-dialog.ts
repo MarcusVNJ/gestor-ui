@@ -43,9 +43,9 @@ export class AppDialog {
     dialog.showModal();
   }
 
-  close(): void {
+  close(force = false): void {
     const dialog = this.dialog().nativeElement;
-    if (!this.busy() && dialog.open) {
+    if ((force || !this.busy()) && dialog.open) {
       dialog.close();
     }
   }

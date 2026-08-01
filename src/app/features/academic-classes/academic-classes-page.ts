@@ -57,6 +57,11 @@ export const seatLimitValidator: ValidatorFn = (
   return null;
 };
 
+export type AcademicClassErrorDetail = {
+  readonly message: string;
+  readonly traceId?: string | null;
+};
+
 @Component({
   selector: 'app-academic-classes-page',
   standalone: true,
@@ -74,14 +79,17 @@ export class AcademicClassesPage implements OnInit {
   private readonly deleteDialog = viewChild.required<AppDialog>('deleteDialog');
   private readonly headingRef = viewChild<ElementRef<HTMLHeadingElement>>('heading');
   private readonly tableRegionRef = viewChild<ElementRef<HTMLDivElement>>('tableRegion');
+  private readonly formSummaryRef = viewChild<ElementRef<HTMLDivElement>>('formSummaryRef');
+  private readonly statusSelectRef = viewChild<ElementRef<HTMLSelectElement>>('statusSelect');
+  private readonly seatLimitInputRef = viewChild<ElementRef<HTMLInputElement>>('seatLimitInput');
 
   protected readonly formMode = signal<FormMode>('create');
   protected readonly editingClass = signal<AcademicClass | null>(null);
   protected readonly classToDelete = signal<AcademicClass | null>(null);
   protected readonly isSubmitting = signal(false);
   protected readonly isDeleting = signal(false);
-  protected readonly formSummaryError = signal<string | null>(null);
-  protected readonly deleteError = signal<string | null>(null);
+  protected readonly formSummaryError = signal<AcademicClassErrorDetail | null>(null);
+  protected readonly deleteError = signal<AcademicClassErrorDetail | null>(null);
 
   protected readonly academicClassForm = new FormGroup({
     openingStatus: new FormControl<OpeningStatus>('OPEN', {
@@ -97,6 +105,12 @@ export class AcademicClassesPage implements OnInit {
 
   ngOnInit(): void {
     this.vm.loadAcademicClasses();
+    this.academicClassForm.controls.openingStatus.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.clearControlApiError(this.academicClassForm.controls.openingStatus));
+    this.academicClassForm.controls.seatLimit.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.clearControlApiError(this.academicClassForm.controls.seatLimit));
   }
 
   protected openCreateDialog(trigger?: HTMLElement | EventTarget | null): void {
@@ -137,13 +151,15 @@ export class AcademicClassesPage implements OnInit {
     this.clearApiErrors();
     this.academicClassForm.markAllAsTouched();
     if (this.academicClassForm.invalid) {
+      this.focusFirstInvalidField();
       return;
     }
 
     const mode = this.formMode();
     const editingClass = this.editingClass();
     if (mode === 'edit' && editingClass === null) {
-      this.formSummaryError.set('Não foi possível identificar a turma selecionada.');
+      this.formSummaryError.set({ message: 'Não foi possível identificar a turma selecionada.' });
+      setTimeout(() => this.formSummaryRef()?.nativeElement.focus(), 0);
       return;
     }
 
@@ -215,7 +231,7 @@ export class AcademicClassesPage implements OnInit {
       .subscribe({
         next: () => {
           this.isDeleting.set(false);
-          this.deleteDialog().close();
+          this.deleteDialog().close(true);
           this.classToDelete.set(null);
           this.scheduleFocusFallback(false);
         },
@@ -223,12 +239,16 @@ export class AcademicClassesPage implements OnInit {
           this.isDeleting.set(false);
           const apiError = normalizeApiError(error);
           if (apiError.status === 404) {
-            this.deleteDialog().close();
+            this.deleteDialog().close(true);
             this.classToDelete.set(null);
             this.scheduleFocusFallback(true);
             return;
           }
-          this.deleteError.set(apiError.detail || 'Não foi possível excluir a turma.');
+          let message = apiError.detail || 'Não foi possível excluir a turma.';
+          if (apiError.kind === 'network' || apiError.status === 500) {
+            message = `${message} Atualize a lista para verificar o estado real antes de tentar novamente.`;
+          }
+          this.deleteError.set({ message, traceId: apiError.traceId });
         },
       });
   }
@@ -266,16 +286,17 @@ export class AcademicClassesPage implements OnInit {
     return 'Informe um limite de vagas válido.';
   }
 
-  private clearApiErrors(): void {
-    for (const control of [
-      this.academicClassForm.controls.openingStatus,
-      this.academicClassForm.controls.seatLimit,
-    ]) {
-      if (control.errors?.['apiError']) {
-        const { apiError: _, ...remainingErrors } = control.errors;
-        control.setErrors(Object.keys(remainingErrors).length > 0 ? remainingErrors : null);
-      }
+  private clearControlApiError(control: AbstractControl): void {
+    if (!control.errors?.['apiError']) {
+      return;
     }
+    const { apiError: _, ...remainingErrors } = control.errors;
+    control.setErrors(Object.keys(remainingErrors).length > 0 ? remainingErrors : null);
+  }
+
+  private clearApiErrors(): void {
+    this.clearControlApiError(this.academicClassForm.controls.openingStatus);
+    this.clearControlApiError(this.academicClassForm.controls.seatLimit);
   }
 
   private handleFormApiError(error: ApiClientError): void {
@@ -305,12 +326,34 @@ export class AcademicClassesPage implements OnInit {
       control.markAsTouched();
     }
 
+    let summaryMessage: string | null = null;
     if (unknownViolations.length > 0) {
-      this.formSummaryError.set(unknownViolations.join(' '));
+      summaryMessage = unknownViolations.join(' ');
     } else if (statusViolation === null && seatLimitViolation === null) {
-      this.formSummaryError.set(
-        error.detail || 'Não foi possível salvar a turma. Tente novamente.',
-      );
+      summaryMessage = error.detail || 'Não foi possível salvar a turma. Tente novamente.';
+      if (error.kind === 'network' || error.status === 500) {
+        summaryMessage = `${summaryMessage} Atualize a lista para verificar o estado real antes de tentar novamente.`;
+      }
+    }
+
+    if (summaryMessage) {
+      this.formSummaryError.set({ message: summaryMessage, traceId: error.traceId });
+    }
+
+    setTimeout(() => {
+      if (this.formSummaryError()) {
+        this.formSummaryRef()?.nativeElement.focus();
+      } else {
+        this.focusFirstInvalidField();
+      }
+    }, 0);
+  }
+
+  private focusFirstInvalidField(): void {
+    if (this.academicClassForm.controls.openingStatus.invalid) {
+      this.statusSelectRef()?.nativeElement.focus();
+    } else if (this.academicClassForm.controls.seatLimit.invalid) {
+      this.seatLimitInputRef()?.nativeElement.focus();
     }
   }
 

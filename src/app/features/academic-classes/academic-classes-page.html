@@ -49,6 +49,11 @@
     @if (vm.isError()) {
       <div class="ui-async-state" role="alert">
         <p>{{ vm.errorMessage() }}</p>
+        @if (vm.errorTraceId(); as traceId) {
+          <p class="ui-support-code">
+            Código para suporte: <code>{{ traceId }}</code>
+          </p>
+        }
         <button
           type="button"
           class="ui-button ui-button--secondary"
@@ -140,8 +145,13 @@
     novalidate
   >
     @if (formSummaryError(); as summaryError) {
-      <div class="ui-message ui-message--danger" role="alert">
-        {{ summaryError }}
+      <div #formSummaryRef class="ui-message ui-message--danger" role="alert" tabindex="-1">
+        <p>{{ summaryError.message }}</p>
+        @if (summaryError.traceId) {
+          <p class="ui-support-code">
+            Código para suporte: <code>{{ summaryError.traceId }}</code>
+          </p>
+        }
       </div>
     }
 
@@ -150,6 +160,7 @@
         Situação <span class="required-indicator" aria-hidden="true">*</span>
       </label>
       <select
+        #statusSelect
         id="academic-class-opening-status"
         formControlName="openingStatus"
         class="ui-control"
@@ -179,6 +190,7 @@
         Limite de vagas <span class="required-indicator" aria-hidden="true">*</span>
       </label>
       <input
+        #seatLimitInput
         id="academic-class-seat-limit"
         type="number"
         min="1"
@@ -249,7 +261,14 @@
     }
 
     @if (deleteError(); as error) {
-      <div class="ui-message ui-message--danger" role="alert">{{ error }}</div>
+      <div class="ui-message ui-message--danger" role="alert">
+        <p>{{ error.message }}</p>
+        @if (error.traceId) {
+          <p class="ui-support-code">
+            Código para suporte: <code>{{ error.traceId }}</code>
+          </p>
+        }
+      </div>
     }
   </div>
 

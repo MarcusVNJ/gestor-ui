@@ -18,6 +18,10 @@
   </p>
 </header>
 
+<div class="sr-only" role="status" aria-live="polite">
+  {{ liveAnnouncement() }}
+</div>
+
 <section class="enrollments-content" aria-labelledby="enrollments-heading">
   <div class="ui-panel query-controls-panel">
     <h2 class="ui-section-title">Consultar matrículas</h2>
@@ -125,6 +129,11 @@
   @if (query.status === 'error') {
     <div class="ui-async-state" role="alert">
       <p>{{ query.message }}</p>
+      @if (vm.queryErrorTraceId(); as traceId) {
+        <p class="ui-support-code">
+          Código para suporte: <code>{{ traceId }}</code>
+        </p>
+      }
       <button type="button" class="ui-button ui-button--secondary" (click)="vm.retryQuery()">
         Tentar novamente
       </button>
@@ -171,6 +180,22 @@
         </div>
       </div>
 
+      @if (transitionFeedback(); as feedback) {
+        <div
+          class="ui-message"
+          [class.ui-message--success]="feedback.type === 'success'"
+          [class.ui-message--danger]="feedback.type === 'error'"
+          role="status"
+        >
+          <p>{{ feedback.message }}</p>
+          @if (feedback.traceId) {
+            <p class="ui-support-code">
+              Código para suporte: <code>{{ feedback.traceId }}</code>
+            </p>
+          }
+        </div>
+      }
+
       <div
         #tableRegion
         class="ui-table-region"
@@ -191,12 +216,20 @@
                 <th scope="col">Aluno</th>
               }
               <th scope="col">Situação</th>
+              <th scope="col">Ações</th>
             </tr>
           </thead>
           <tbody>
             @for (enrollment of query.enrollments; track enrollment.id) {
-              <tr>
-                <th scope="row" class="enrollment-id">{{ enrollment.id }}</th>
+              <tr [id]="'enrollment-row-' + enrollment.id">
+                <th
+                  scope="row"
+                  [id]="'enrollment-id-' + enrollment.id"
+                  tabindex="-1"
+                  class="enrollment-id"
+                >
+                  {{ enrollment.id }}
+                </th>
                 @if (query.axis === 'student') {
                   <td class="enrollment-class-id">{{ enrollment.academicClassId }}</td>
                 } @else {
@@ -211,6 +244,47 @@
                 }
                 <td>
                   <app-status-badge [status]="enrollment.status" />
+                </td>
+                <td class="enrollment-actions">
+                  <div class="ui-actions">
+                    @if (enrollment.status === 'PENDING') {
+                      <button
+                        #confirmBtn
+                        [id]="'confirm-btn-' + enrollment.id"
+                        type="button"
+                        class="ui-button ui-button--secondary"
+                        [disabled]="pendingTransitionId() === enrollment.id"
+                        [attr.aria-busy]="pendingTransitionId() === enrollment.id ? 'true' : null"
+                        (click)="confirmEnrollment(enrollment, $event.currentTarget)"
+                      >
+                        {{
+                          pendingTransitionId() === enrollment.id
+                            ? 'Confirmando...'
+                            : 'Confirmar matrícula'
+                        }}
+                      </button>
+                    }
+                    @if (enrollment.status === 'CONFIRMED') {
+                      <button
+                        #cancelBtn
+                        [id]="'cancel-btn-' + enrollment.id"
+                        type="button"
+                        class="ui-button ui-button--destructive"
+                        [disabled]="pendingTransitionId() === enrollment.id"
+                        [attr.aria-busy]="pendingTransitionId() === enrollment.id ? 'true' : null"
+                        (click)="openCancelDialog(enrollment, $event.currentTarget)"
+                      >
+                        {{
+                          pendingTransitionId() === enrollment.id
+                            ? 'Cancelando...'
+                            : 'Cancelar matrícula'
+                        }}
+                      </button>
+                    }
+                    @if (enrollment.status === 'CANCELED') {
+                      <span class="ui-metadata">Nenhuma ação disponível</span>
+                    }
+                  </div>
                 </td>
               </tr>
             }
@@ -234,7 +308,7 @@
   @if (createdEnrollment(); as created) {
     <div class="enrollment-success-view">
       <div class="enrollment-success-header">
-        <span class="ui-label">Status confirmado:</span>
+        <span class="ui-label">Status confirmed:</span>
         <app-status-badge [status]="created.status" />
       </div>
 
@@ -311,8 +385,13 @@
       }
 
       @if (formSummaryError(); as summaryError) {
-        <div class="ui-message ui-message--danger" role="alert">
-          {{ summaryError }}
+        <div #formSummaryRef class="ui-message ui-message--danger" role="alert" tabindex="-1">
+          <p>{{ summaryError.message }}</p>
+          @if (summaryError.traceId) {
+            <p class="ui-support-code">
+              Código para suporte: <code>{{ summaryError.traceId }}</code>
+            </p>
+          }
         </div>
       }
 
@@ -411,4 +490,80 @@
       </div>
     </form>
   }
+</app-dialog>
+
+<app-dialog
+  id="cancelDialog"
+  #cancelDialog
+  title="Cancelar matrícula?"
+  description="Esta ação não pode ser desfeita. O cancelamento liberará a vaga na turma e o contrato não permite reativação."
+  [busy]="isSubmittingCancel()"
+>
+  <div class="cancel-confirmation-content">
+    @if (cancelDialogEnrollment(); as enrollment) {
+      <p>
+        Deseja cancelar a matrícula <strong>{{ enrollment.id }}</strong
+        >?
+      </p>
+
+      <dl class="enrollment-details-list">
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">ID da matrícula:</dt>
+          <dd class="enrollment-detail-item__value">{{ enrollment.id }}</dd>
+        </div>
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">Aluno:</dt>
+          <dd class="enrollment-detail-item__value">
+            @if (cancelDialogStudent(); as std) {
+              {{ std.name }} ({{ std.email }})
+            } @else if (vm.getStudentById(enrollment.studentId); as std) {
+              {{ std.name }} ({{ std.email }})
+            } @else {
+              {{ enrollment.studentId }}
+            }
+          </dd>
+        </div>
+        <div class="enrollment-detail-item">
+          <dt class="ui-label">ID da turma:</dt>
+          <dd class="enrollment-detail-item__value">{{ enrollment.academicClassId }}</dd>
+        </div>
+      </dl>
+
+      <p class="ui-field-help">
+        Atenção: O contrato do sistema não possui funcionalidade de reativação de matrícula.
+      </p>
+    }
+
+    @if (cancelError(); as error) {
+      <div class="ui-message ui-message--danger" role="alert">
+        <p>{{ error.message }}</p>
+        @if (error.traceId) {
+          <p class="ui-support-code">
+            Código para suporte: <code>{{ error.traceId }}</code>
+          </p>
+        }
+      </div>
+    }
+  </div>
+
+  <div dialog-actions class="ui-actions">
+    <button
+      type="button"
+      class="ui-button ui-button--secondary"
+      autofocus
+      [disabled]="isSubmittingCancel()"
+      (click)="closeCancelDialog()"
+    >
+      Manter matrícula
+    </button>
+    <button
+      type="button"
+      class="ui-button ui-button--destructive"
+      [disabled]="isSubmittingCancel()"
+      [attr.aria-busy]="isSubmittingCancel() ? 'true' : null"
+      (click)="submitCancel()"
+    >
+      {{ isSubmittingCancel() ? 'Cancelando...' : 'Confirmar cancelamento' }}
+    </button>
+  </div>
 </app-dialog>

@@ -9,7 +9,12 @@ export type CoursesListState =
   | { status: 'loading' }
   | { status: 'success'; courses: readonly Course[] }
   | { status: 'updating'; courses: readonly Course[] }
-  | { status: 'error'; message: string; courses: readonly Course[] | null };
+  | {
+      status: 'error';
+      message: string;
+      traceId?: string | null;
+      courses: readonly Course[] | null;
+    };
 
 export type CoursesNotice = {
   readonly tone: 'success' | 'warning';
@@ -40,6 +45,10 @@ export class CoursesViewModel {
     const state = this.listState();
     return state.status === 'error' ? state.message : null;
   });
+  readonly errorTraceId = computed(() => {
+    const state = this.listState();
+    return state.status === 'error' ? (state.traceId ?? null) : null;
+  });
 
   readonly courses = computed(() => this.resolvedCourses() ?? []);
   readonly hasResolvedCourses = computed(() => this.resolvedCourses() !== null);
@@ -67,6 +76,7 @@ export class CoursesViewModel {
               return of<CoursesListState>({
                 status: 'error',
                 message: apiError.detail,
+                traceId: apiError.traceId,
                 courses: currentCourses,
               });
             }),
