@@ -1,0 +1,276 @@
+<header class="academic-classes-header">
+  <div class="academic-classes-header__main">
+    <div class="academic-classes-header__title-group">
+      <h1 #heading id="academic-classes-heading" tabindex="-1" class="ui-page-title">Turmas</h1>
+      <span class="ui-badge ui-badge--neutral" aria-label="Total de turmas">
+        @if (vm.hasResolvedAcademicClasses()) {
+          {{ vm.itemCount() }} {{ vm.itemCount() === 1 ? 'turma' : 'turmas' }}
+        } @else {
+          Total indisponível
+        }
+      </span>
+    </div>
+    <button
+      #createButton
+      type="button"
+      class="ui-button ui-button--primary"
+      [disabled]="vm.isLoading() || vm.isUpdating()"
+      (click)="openCreateDialog(createButton)"
+    >
+      Cadastrar turma
+    </button>
+  </div>
+  <p class="academic-classes-header__description">
+    Consulte e gerencie as turmas disponíveis para matrícula.
+  </p>
+</header>
+
+@if (vm.notice(); as notice) {
+  <div
+    class="ui-message"
+    [class.ui-message--success]="notice.tone === 'success'"
+    [class.ui-message--warning]="notice.tone === 'warning'"
+    role="status"
+  >
+    {{ notice.message }}
+  </div>
+}
+
+<section class="academic-classes-content" aria-labelledby="academic-classes-heading">
+  @if (vm.isLoading()) {
+    <div class="ui-async-state" role="status">
+      <p>Carregando turmas...</p>
+    </div>
+  } @else {
+    @if (vm.isUpdating()) {
+      <div class="ui-message ui-message--info" role="status">Atualizando turmas...</div>
+    }
+
+    @if (vm.isError()) {
+      <div class="ui-async-state" role="alert">
+        <p>{{ vm.errorMessage() }}</p>
+        <button
+          type="button"
+          class="ui-button ui-button--secondary"
+          (click)="vm.loadAcademicClasses()"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    }
+
+    @if (vm.hasResolvedAcademicClasses()) {
+      @if (vm.isEmpty()) {
+        <div class="ui-async-state">
+          <p>Nenhuma turma cadastrada</p>
+        </div>
+      } @else {
+        <div
+          #tableRegion
+          class="ui-table-region"
+          tabindex="0"
+          role="region"
+          aria-label="Lista de turmas"
+          [attr.aria-busy]="vm.isUpdating() ? 'true' : null"
+        >
+          <table class="ui-table">
+            <caption class="sr-only">
+              Turmas cadastradas no sistema
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Identificador</th>
+                <th scope="col">Situação</th>
+                <th scope="col">Limite de vagas</th>
+                <th scope="col">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (classItem of vm.academicClasses(); track classItem.id) {
+                <tr>
+                  <th scope="row" class="academic-class-id">{{ classItem.id }}</th>
+                  <td class="academic-class-status">
+                    <app-status-badge [status]="classItem.openingStatus" />
+                  </td>
+                  <td>{{ classItem.seatLimit }}</td>
+                  <td>
+                    <div class="ui-actions">
+                      <button
+                        type="button"
+                        class="ui-button ui-button--secondary"
+                        [disabled]="vm.isUpdating()"
+                        (click)="openEditDialog(classItem, $event.currentTarget)"
+                      >
+                        Editar <span class="sr-only">turma {{ classItem.id }}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="ui-button ui-button--destructive"
+                        [disabled]="vm.isUpdating()"
+                        (click)="openDeleteDialog(classItem, $event.currentTarget)"
+                      >
+                        Excluir <span class="sr-only">turma {{ classItem.id }}</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  }
+</section>
+
+<app-dialog
+  #formDialog
+  [title]="formMode() === 'create' ? 'Cadastrar turma' : 'Editar turma'"
+  [description]="
+    formMode() === 'create'
+      ? 'Informe a situação e o limite de vagas da nova turma.'
+      : 'Atualize a situação ou o limite de vagas da turma selecionada.'
+  "
+  [busy]="isSubmitting()"
+>
+  <form
+    [formGroup]="academicClassForm"
+    (ngSubmit)="submitForm()"
+    class="academic-class-form"
+    novalidate
+  >
+    @if (formSummaryError(); as summaryError) {
+      <div class="ui-message ui-message--danger" role="alert">
+        {{ summaryError }}
+      </div>
+    }
+
+    <div class="ui-field">
+      <label for="academic-class-opening-status" class="ui-label">
+        Situação <span class="required-indicator" aria-hidden="true">*</span>
+      </label>
+      <select
+        id="academic-class-opening-status"
+        formControlName="openingStatus"
+        class="ui-control"
+        autofocus
+        [attr.aria-invalid]="getOpeningStatusError() !== null ? 'true' : null"
+        [attr.aria-describedby]="
+          getOpeningStatusError() !== null
+            ? 'academic-class-opening-status-help academic-class-opening-status-error'
+            : 'academic-class-opening-status-help'
+        "
+      >
+        <option value="OPEN">Aberta</option>
+        <option value="CLOSED">Fechada</option>
+      </select>
+      <p id="academic-class-opening-status-help" class="ui-field-help">
+        Defina se a turma está aberta ou fechada para novas matrículas.
+      </p>
+      @if (getOpeningStatusError(); as openingStatusError) {
+        <p id="academic-class-opening-status-error" class="ui-field-error" role="alert">
+          {{ openingStatusError }}
+        </p>
+      }
+    </div>
+
+    <div class="ui-field">
+      <label for="academic-class-seat-limit" class="ui-label">
+        Limite de vagas <span class="required-indicator" aria-hidden="true">*</span>
+      </label>
+      <input
+        id="academic-class-seat-limit"
+        type="number"
+        min="1"
+        step="1"
+        autocomplete="off"
+        formControlName="seatLimit"
+        class="ui-control"
+        [attr.aria-invalid]="getSeatLimitError() !== null ? 'true' : null"
+        [attr.aria-describedby]="
+          getSeatLimitError() !== null
+            ? 'academic-class-seat-limit-help academic-class-seat-limit-error'
+            : 'academic-class-seat-limit-help'
+        "
+      />
+      <p id="academic-class-seat-limit-help" class="ui-field-help">
+        Informe um número inteiro maior ou igual a 1.
+      </p>
+      @if (getSeatLimitError(); as seatLimitError) {
+        <p id="academic-class-seat-limit-error" class="ui-field-error" role="alert">
+          {{ seatLimitError }}
+        </p>
+      }
+    </div>
+
+    <div dialog-actions class="ui-actions">
+      <button
+        type="button"
+        class="ui-button ui-button--secondary"
+        [disabled]="isSubmitting()"
+        (click)="closeFormDialog()"
+      >
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        class="ui-button ui-button--primary"
+        [disabled]="isSubmitting()"
+        [attr.aria-busy]="isSubmitting() ? 'true' : null"
+      >
+        {{
+          isSubmitting()
+            ? formMode() === 'create'
+              ? 'Cadastrando...'
+              : 'Salvando...'
+            : formMode() === 'create'
+              ? 'Cadastrar turma'
+              : 'Salvar alterações'
+        }}
+      </button>
+    </div>
+  </form>
+</app-dialog>
+
+<app-dialog
+  #deleteDialog
+  title="Excluir turma?"
+  description="Esta ação é permanente e removerá a turma da base de dados."
+  [busy]="isDeleting()"
+>
+  <div class="delete-confirmation-content">
+    @if (classToDelete(); as classItem) {
+      <p>
+        Tem certeza que deseja excluir a turma com ID
+        <strong class="academic-class-id">{{ classItem.id }}</strong
+        >?
+      </p>
+      <p class="delete-warning">Esta ação é permanente e não poderá ser desfeita.</p>
+    }
+
+    @if (deleteError(); as error) {
+      <div class="ui-message ui-message--danger" role="alert">{{ error }}</div>
+    }
+  </div>
+
+  <div dialog-actions class="ui-actions">
+    <button
+      type="button"
+      class="ui-button ui-button--secondary"
+      autofocus
+      [disabled]="isDeleting()"
+      (click)="closeDeleteDialog()"
+    >
+      Cancelar
+    </button>
+    <button
+      type="button"
+      class="ui-button ui-button--destructive"
+      [disabled]="isDeleting()"
+      [attr.aria-busy]="isDeleting() ? 'true' : null"
+      (click)="confirmDelete()"
+    >
+      {{ isDeleting() ? 'Excluindo...' : 'Excluir turma' }}
+    </button>
+  </div>
+</app-dialog>

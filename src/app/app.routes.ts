@@ -43,7 +43,10 @@ export const routes: Routes = [
   },
   {
     path: 'turmas',
-    loadComponent: loadFeaturePage,
+    loadComponent: () =>
+      import('./features/academic-classes/academic-classes-page').then(
+        ({ AcademicClassesPage }) => AcademicClassesPage,
+      ),
     title: 'Turmas | Gestor acadêmico',
     data: {
       heading: 'Turmas',
