@@ -1,0 +1,225 @@
+<header class="courses-header">
+  <div class="courses-header__main">
+    <div class="courses-header__title-group">
+      <h1 #heading id="courses-heading" tabindex="-1" class="ui-page-title">Cursos</h1>
+      <span class="ui-badge ui-badge--neutral" aria-label="Total de cursos">
+        @if (vm.hasResolvedCourses()) {
+          {{ vm.itemCount() }} {{ vm.itemCount() === 1 ? 'curso' : 'cursos' }}
+        } @else {
+          Total indisponível
+        }
+      </span>
+    </div>
+    <button
+      #createButton
+      type="button"
+      class="ui-button ui-button--primary"
+      [disabled]="vm.isLoading() || vm.isUpdating()"
+      (click)="openCreateDialog(createButton)"
+    >
+      Cadastrar curso
+    </button>
+  </div>
+  <p class="courses-header__description">
+    Consulte e gerencie os cursos oferecidos pela instituição.
+  </p>
+</header>
+
+@if (vm.notice(); as notice) {
+  <div
+    class="ui-message"
+    [class.ui-message--success]="notice.tone === 'success'"
+    [class.ui-message--warning]="notice.tone === 'warning'"
+    role="status"
+  >
+    {{ notice.message }}
+  </div>
+}
+
+<section class="courses-content" aria-labelledby="courses-heading">
+  @if (vm.isLoading()) {
+    <div class="ui-async-state" role="status">
+      <p>Carregando cursos...</p>
+    </div>
+  } @else {
+    @if (vm.isUpdating()) {
+      <div class="ui-message ui-message--info" role="status">Atualizando cursos...</div>
+    }
+
+    @if (vm.isError()) {
+      <div class="ui-async-state" role="alert">
+        <p>{{ vm.errorMessage() }}</p>
+        <button type="button" class="ui-button ui-button--secondary" (click)="vm.loadCourses()">
+          Tentar novamente
+        </button>
+      </div>
+    }
+
+    @if (vm.hasResolvedCourses()) {
+      @if (vm.isEmpty()) {
+        <div class="ui-async-state">
+          <p>Nenhum curso cadastrado</p>
+        </div>
+      } @else {
+        <div
+          #tableRegion
+          class="ui-table-region"
+          tabindex="0"
+          role="region"
+          aria-label="Lista de cursos"
+          [attr.aria-busy]="vm.isUpdating() ? 'true' : null"
+        >
+          <table class="ui-table">
+            <caption class="sr-only">
+              Cursos cadastrados no sistema
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Nome</th>
+                <th scope="col">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (course of vm.courses(); track course.id) {
+                <tr>
+                  <th scope="row" class="course-name">{{ course.name }}</th>
+                  <td>
+                    <div class="ui-actions">
+                      <button
+                        type="button"
+                        class="ui-button ui-button--secondary"
+                        [disabled]="vm.isUpdating()"
+                        (click)="openEditDialog(course, $event.currentTarget)"
+                      >
+                        Editar <span class="sr-only">curso {{ course.name }}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="ui-button ui-button--destructive"
+                        [disabled]="vm.isUpdating()"
+                        (click)="openDeleteDialog(course, $event.currentTarget)"
+                      >
+                        Excluir <span class="sr-only">curso {{ course.name }}</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  }
+</section>
+
+<app-dialog
+  #formDialog
+  [title]="formMode() === 'create' ? 'Cadastrar curso' : 'Editar curso'"
+  [description]="
+    formMode() === 'create'
+      ? 'Informe o nome do novo curso.'
+      : 'Atualize o nome do curso selecionado.'
+  "
+  [busy]="isSubmitting()"
+>
+  <form [formGroup]="courseForm" (ngSubmit)="submitForm()" class="course-form" novalidate>
+    @if (formSummaryError(); as summaryError) {
+      <div class="ui-message ui-message--danger" role="alert">
+        {{ summaryError }}
+      </div>
+    }
+
+    <div class="ui-field">
+      <label for="course-name" class="ui-label">
+        Nome <span class="required-indicator" aria-hidden="true">*</span>
+      </label>
+      <input
+        id="course-name"
+        type="text"
+        autocomplete="off"
+        formControlName="name"
+        class="ui-control"
+        autofocus
+        [attr.aria-invalid]="getNameError() !== null ? 'true' : null"
+        [attr.aria-describedby]="
+          getNameError() !== null ? 'course-name-help course-name-error' : 'course-name-help'
+        "
+      />
+      <p id="course-name-help" class="ui-field-help">
+        Informe de 1 a 120 caracteres. Espaços no início e no fim serão removidos.
+      </p>
+      @if (getNameError(); as nameError) {
+        <p id="course-name-error" class="ui-field-error" role="alert">{{ nameError }}</p>
+      }
+    </div>
+
+    <div dialog-actions class="ui-actions">
+      <button
+        type="button"
+        class="ui-button ui-button--secondary"
+        [disabled]="isSubmitting()"
+        (click)="closeFormDialog()"
+      >
+        Cancelar
+      </button>
+      <button
+        type="submit"
+        class="ui-button ui-button--primary"
+        [disabled]="isSubmitting()"
+        [attr.aria-busy]="isSubmitting() ? 'true' : null"
+      >
+        {{
+          isSubmitting()
+            ? formMode() === 'create'
+              ? 'Cadastrando...'
+              : 'Salvando...'
+            : formMode() === 'create'
+              ? 'Cadastrar curso'
+              : 'Salvar alterações'
+        }}
+      </button>
+    </div>
+  </form>
+</app-dialog>
+
+<app-dialog
+  #deleteDialog
+  title="Excluir curso?"
+  description="Esta ação é permanente e removerá o curso da base de dados."
+  [busy]="isDeleting()"
+>
+  <div class="delete-confirmation-content">
+    @if (courseToDelete(); as course) {
+      <p>
+        Tem certeza que deseja excluir o curso <strong>{{ course.name }}</strong
+        >?
+      </p>
+    }
+
+    @if (deleteError(); as error) {
+      <div class="ui-message ui-message--danger" role="alert">{{ error }}</div>
+    }
+  </div>
+
+  <div dialog-actions class="ui-actions">
+    <button
+      type="button"
+      class="ui-button ui-button--secondary"
+      autofocus
+      [disabled]="isDeleting()"
+      (click)="closeDeleteDialog()"
+    >
+      Cancelar
+    </button>
+    <button
+      type="button"
+      class="ui-button ui-button--destructive"
+      [disabled]="isDeleting()"
+      [attr.aria-busy]="isDeleting() ? 'true' : null"
+      (click)="confirmDelete()"
+    >
+      {{ isDeleting() ? 'Excluindo...' : 'Excluir curso' }}
+    </button>
+  </div>
+</app-dialog>

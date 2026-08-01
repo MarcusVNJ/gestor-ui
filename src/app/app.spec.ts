@@ -1,8 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
+import { of } from 'rxjs';
 
 import { App } from './app';
 import { appConfig } from './app.config';
+import { CoursesApi } from './features/courses/courses-api';
 
 const NAVIGATION_LABELS = ['Alunos', 'Cursos', 'Disciplinas', 'Turmas', 'Matrículas'];
 const FEATURE_ROUTES = [
@@ -17,7 +19,13 @@ describe('Application shell and routing', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [App],
-      providers: appConfig.providers,
+      providers: [
+        ...appConfig.providers,
+        {
+          provide: CoursesApi,
+          useValue: { listCourses: () => of([]) },
+        },
+      ],
     });
   });
 

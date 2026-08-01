@@ -21,7 +21,8 @@ export const routes: Routes = [
   },
   {
     path: 'cursos',
-    loadComponent: loadFeaturePage,
+    loadComponent: () =>
+      import('./features/courses/courses-page').then(({ CoursesPage }) => CoursesPage),
     title: 'Cursos | Gestor acadêmico',
     data: {
       heading: 'Cursos',
